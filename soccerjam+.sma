@@ -15,7 +15,7 @@
 * 	- Official updated modified version of original SoccerJam Mod made by OneEyed:
 * 		http://forums.alliedmods.net/showthread.php?t=41447
 *
-*   - Tournament mod by Doondook:
+*  	- Tournament mod by Doondook:
 *		https://github.com/Doondook/soccerjam
 *
 ***	- Public version of Doondook's mod by DK:
