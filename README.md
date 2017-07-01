@@ -9,3 +9,6 @@ SoccerJamPlus Public
     - The .zip file contains all models, sounds, recommended maps, compiled plugin, .sma file with used libraries (include), config & lang files, and latest GEOIP+ by Arkshine.
   
     - Further informations included in soccerjamplus/readme.txt.
+
+
+[DK]
