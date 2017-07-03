@@ -6,9 +6,9 @@ SoccerJamPlus Public
 
 3) Restart from Control Panel.
 
-    - The .zip file contains all models, sounds, recommended maps, compiled plugin, .sma file with used libraries (include), config & lang files, and latest GEOIP+ by Arkshine.
+    - The .zip file contains all models, sounds, recommended maps, compiled plugin, .sma file with used libraries (include), config & lang files, and latest GEOIP+ by Arkshine;
   
-    - Requires AMXX ver 1.8.2
+    - Requires AMXX ver 1.8.2;
     - Further informations included in soccerjamplus/readme.txt.
 
 
