@@ -14,12 +14,8 @@
 *
 * 	- Official updated modified version of original SoccerJam Mod made by OneEyed:
 * 		http://forums.alliedmods.net/showthread.php?t=41447
-*
-*  	- Tournament mod by Doondook:
+*   - Tournament mod by Doondook:
 *		https://github.com/Doondook/soccerjam
-*
-***	- Public version of Doondook's mod by DK:
-*		https://github.com/davidkohout/SoccerjamPlusPublic
 *
 *		1) Just copy & paste (& overwrite) all files from soccerjamplus.zip at your server. 
 *		2) Disable not needed plugins like afk kicker, custom map chooser, camera changer (these updated plugins are included in this mod for better performance).
@@ -49,7 +45,7 @@
 *		Console CVARS:
 * 		- sj_multiball (20) - amount of the balls for "multiball" command
 * 		     		      (32 balls is the limit to prevent server crashes);
-* 		- sj_lamedist (85) - max distance to the opposite goals as far you can score,
+* 		- sj_lamedist (90) - max distance to the opposite goals as far you can score,
 * 		    		    if there is no opponents in alien zone in moment of shoot;
 *		- sj_antideveloper (0) - enables antideveloper, warns & kicks player if his fps_override or developer is set to 1.
 *		- sj_regen (0) - enables global HP regeneration
@@ -970,7 +966,7 @@ public plugin_init(){
 	//cv_type		=	register_cvar("sj_type", 	"0")
 	cv_huntdist 	=	register_cvar("sj_huntdist", 	"0")
 	cv_huntgk	=	register_cvar("sj_huntgk", 	"5.0")
-	cv_lamedist 	=	register_cvar("sj_lamedist", 	"85")
+	cv_lamedist 	=	register_cvar("sj_lamedist", 	"90")
 	cv_score[0] 	= 	register_cvar("sj_score", 	"ScoreLim[31]")
 	cv_score[T] 	= 	register_cvar("sj_scoret", 	"0")
 	cv_score[CT] 	= 	register_cvar("sj_scorect", 	"0")
@@ -2999,10 +2995,11 @@ public SetupRound(){
 		CreateBall(i)
 		if(g_iTeamBall == 0)
 			MoveBall(1, 0, i)
-		else if(contain(g_mapname, "sj_downunder") > -1 || contain(g_mapname, "sj_westwood") > -1 || contain(g_mapname, "click21") > -1 ){
-			MoveBall(1, 0, i)
-		} else {
+		//else if(contain(g_mapname, "sj_downunder") > -1 || contain(g_mapname, "sj_westwood") > -1 || contain(g_mapname, "click21" ) > -1 || contain(g_mapname, "futsal" ) > -1){
+		else if(contain(g_mapname, "soccerjam") > -1 || contain(g_mapname, "sj_trix_zone") > -1 || contain(g_mapname, "sansiro") > -1 || contain(g_mapname, "danger_final") > -1 || contain(g_mapname, "mxsoccer_small") > -1 || contain(g_mapname, "ak0") > -1  || contain(g_mapname, "marakana") > -1){
 			MoveBall(0, g_iTeamBall==T?CT:T, i)
+		} else {
+			MoveBall(1, 0, i)
 		}
 	}
 
