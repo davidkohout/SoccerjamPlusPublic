@@ -11,4 +11,8 @@ SoccerJamPlus Public
     - Requires AMXX ver 1.8.2 and latest GEOIP+;
     - If you wish to compile locally, please make sure to use the provided include files and AMXX version 1.8.2.
 
+    CREDITS:
+        OneEyed's original version https://forums.alliedmods.net/showthread.php?t=41447
+        Doondook's edit for tournament https://github.com/Doondook/soccerjam
+
 [DK]
