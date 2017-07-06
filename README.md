@@ -10,6 +10,5 @@ SoccerJamPlus Public
   
     - Requires AMXX ver 1.8.2 and latest GEOIP+;
     - If you wish to compile locally, please make sure to use the provided include files and AMXX version 1.8.2.
-    - Further informations included in soccerjamplus/readme.txt.
 
 [DK]
