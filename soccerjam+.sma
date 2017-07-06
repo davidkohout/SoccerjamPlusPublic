@@ -67,7 +67,7 @@
 *
 * - Change log:
 *
-* - - version 2.0.2 (pub modification):
+* - - version 2.0.3 (pub modification):
 *
 *	Various bugs fixed
 *	Implemented no fall damage (training mode);
@@ -186,8 +186,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.0.2"
-#define LASTCHANGE 	"2017-06-30"
+#define VERSION 	"2.0.3"
+#define LASTCHANGE 	"2017-07-06"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -217,6 +217,22 @@ new g_bIsBot, g_bIsAlive, g_bIsConnected
 #define CT		2
 #define SPECTATOR 	3
 #define UNASSIGNED 	0
+
+/*
++-----------------------+--------------------------------------------------------------------------+
+|			| ************************************************************************ |
+|   [CUSTOM MODIFICATIONS]	| ******************************************************************** |
+|			| ************************************************************************ |
++-----------------------+--------------------------------------------------------------------------+
+*/
+
+// Skills bonuses
+#define AMOUNT_STA 		100	// Health
+#define AMOUNT_STR 		25	// Stronger kicking
+#define AMOUNT_AGI 		13	// Faster Speed
+#define AMOUNT_DEX 		18	// Better Catching
+#define AMOUNT_DIS 		6	// Disarm ball chance (disarm lvl * this)
+
 static const mdl_mascots[TEAMS][] = {
 	"NULL",
 	"models/kingpin.mdl",
@@ -231,14 +247,14 @@ static const mdl_mask[TEAMS][] = {
 	"NULL"
 }
 
-/*
-static const mdl_players[TEAMS][] = {
-	"NULL",
-	"models/kickball/ronaldo.mdl",
-	"models/kickball/messi.mdl",
-	"NULL"
-}
-*/
+//------------------------- DO NOT EDIT BELOW -----------------------------//
+
+// Curve Ball Defines
+#define CURVE_ANGLE		15	// Angle for spin kick multipled by current direction
+#define CURVE_COUNT		6	// Curve this many times
+#define CURVE_TIME		0.2	// Time to curve again
+#define DIRECTIONS		2	// # of angles allowed
+#define	ANGLEDIVIDE		6	// Divide angle this many times for curve
 
 new TeamNames[TEAMS][32] = {
 	"Unassigned",
@@ -275,13 +291,6 @@ new GAME_SETS = SETS_DEFAULT
 #define AMOUNT_POWERPLAY 	5
 #define MAX_POWERPLAY		5
 
-// Curve Ball Defines
-#define CURVE_ANGLE		15	// Angle for spin kick multipled by current direction
-#define CURVE_COUNT		6	// Curve this many times
-#define CURVE_TIME		0.2	// Time to curve again
-#define DIRECTIONS		2	// # of angles allowed
-#define	ANGLEDIVIDE		6	// Divide angle this many times for curve
-
 #define SHOTCLOCK_TIME 		12
 #define COUNTDOWN_TIME 		10
 
@@ -296,11 +305,11 @@ new GAME_SETS = SETS_DEFAULT
 // $$ for each action
 #define POINTS_GOALY_CAMP	20
 #define POINTS_GOAL		100
-#define POINTS_ASSIST		80
+#define POINTS_ASSIST		60
 #define POINTS_STEAL		30
 #define POINTS_HUNT		0
 #define POINTS_BALLKILL		20
-#define POINTS_PASS		5
+#define POINTS_PASS		0
 #define POINTS_DISHITS		5
 #define POINTS_FAIL		0
 #define POINTS_GOALSAVE 	10
@@ -308,13 +317,6 @@ new GAME_SETS = SETS_DEFAULT
 #define POINTS_LATEJOIN		60
 
 #define STARTING_CREDITS 	12
-
-// Skills bonuses
-#define AMOUNT_STA 		100	// Health
-#define AMOUNT_STR 		25	// Stronger kicking
-#define AMOUNT_AGI 		13	// Faster Speed
-#define AMOUNT_DEX 		18	// Better Catching
-#define AMOUNT_DIS 		6	// Disarm ball chance (disarm lvl * this)
 
 #define MVP_GOAL	100
 #define MVP_ASSIST	60
@@ -538,7 +540,6 @@ new ROUND
 new g_maxcredits
 
 new g_GK[TEAMS]
-new g_hatent[MAX_PLAYERS + 1]
 new bool:g_GK_immunity[MAX_PLAYERS + 1]
 
 new g_MVP_points[MAX_PLAYERS + 1], g_MVP, g_MVP_name[32]
@@ -3200,7 +3201,6 @@ public PlayerSpawnedSettings(id, szEntity){
 		set_speedchange(id)
 
 		set_pev(id, pev_health, float(100 + (PlayerUpgrades[id][STA] * AMOUNT_STA)))
-		ChangeGK(id)
 
 		// prevent bug when transfered from spec or non-team
 		new sz_clip
@@ -3441,7 +3441,6 @@ public ChatCommands(id){
 		if((equal(sz_cmd, ".ready") || equal(sz_cmd, "/ready")) && T <= sz_team <= CT) {
 			if(g_Credits[id]) {
 				ColorChat(id, RED, "You must use all your credits before becoming ready!")
-				TNT_BuyUpgrade(id)
 				return PLUGIN_HANDLED_MAIN
 			}
 
@@ -3473,11 +3472,8 @@ public ChatCommands(id){
 			} else {
 				ResetSkills(id)
 
-				ChangeGK(id)
 
 				g_Ready[id] = false
-
-				TNT_BuyUpgrade(id)
 			}
 			if(!get_pcvar_num(cv_chat)){
 				return PLUGIN_HANDLED_MAIN
@@ -3700,7 +3696,6 @@ public ChatCommands_team(id){
 		if((equal(sz_cmd, ".ready") || equal(sz_cmd, "/ready")) && (T <= sz_team <= CT)){
 			if(g_Credits[id]) {
 				ColorChat(id, RED, "You must use all your credits before becoming ready!")
-				TNT_BuyUpgrade(id)
 			} else {
 				if(g_Ready[id] == false){
 					g_Ready[id] = true
@@ -3742,11 +3737,9 @@ public ChatCommands_team(id){
 			} else {
 				ResetSkills(id)
 
-				ChangeGK(id)
 
 				g_Ready[id] = false
 
-				TNT_BuyUpgrade(id)
 
 				if(sz_team == T){
 					for(new i = 1; i <= g_maxplayers; i++){
@@ -4006,12 +3999,6 @@ public CameraChanger(id){
 */
 
 public BuyUpgrade(id){
-
-	if(GAME_TYPE == TYPE_TOURNAMENT){
-		TNT_BuyUpgrade(id)
-		return PLUGIN_HANDLED
-	}
-
 	if(!(T <= get_user_team(id) <= CT)){
 		//ShowUpgrade(id, id)
 		return PLUGIN_HANDLED
@@ -4092,14 +4079,16 @@ public Upgrade_Handler(id, menu, item){
 			PlayerUpgrades[id][item]++
 			if(PlayerUpgrades[id][item] == UpgradeMax[item])
 				play_wav(id, snd_levelup)
-
+				
 			g_Experience[id] -= UpgradePrice[item][PlayerUpgrades[id][item]]
 			cs_set_user_money(id, g_Experience[id])
 
 			switch(item){
 				case STA: {
 					set_pev(id, pev_max_health, float(BASE_HP + PlayerUpgrades[id][item] * AMOUNT_STA))
-					ColorChat(id, GREEN, "^4[SJ]^1 - Please note that stamina will be upgraded after respawn.")
+					if(PlayerUpgrades[id][STA] == UpgradeMax[STA]){
+						ColorChat(id, GREEN, "^4[SJ]^1 - To prevent stamina upgrade abuse, HP will be added after respawn.")
+					}
 				}
 				case AGI: {
 					if(!g_sprint[id]){
@@ -4148,143 +4137,6 @@ public ShowUpgrade(id, player){
 	menu_upgrade[id] =  player
 
 	return PLUGIN_CONTINUE
-}
-
-public TNT_BuyUpgrade(id) {
-	new sz_temp[64], num[2], mTitle[101]
-	if(!g_Credits[id] || (GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME) || !(T <= get_user_team(id) <= CT)){
-		TNT_ShowUpgrade(id, id)
-		return PLUGIN_HANDLED
-	}
-
-	format(mTitle, 100, "\yPlayer Skills^nCredits %d", g_Credits[id])
-	new x, sz_lang[32], sz_skillInfo[32]
-	menu_upgrade[id] = menu_create(mTitle, "TNT_Upgrade_Handler")
-	for(x = 1; x <= UPGRADES; x++){
-		switch(x){
-			case STA:{
-				format(sz_skillInfo, charsmax(sz_skillInfo), "%d HP",
-				BASE_HP + (PlayerUpgrades[id][x] * AMOUNT_STA))
-			}
-			case STR:{
-				format(sz_skillInfo, charsmax(sz_skillInfo), "%d u/sec, +%d%% smack",
-				get_pcvar_num(cv_kick) + (PlayerUpgrades[id][x] * AMOUNT_STR), (PlayerUpgrades[id][x] * AMOUNT_STR) / 10)
-			}
-			case AGI:{
-				format(sz_skillInfo, charsmax(sz_skillInfo), "%d u/sec",
-				floatround(BASE_SPEED) + (PlayerUpgrades[id][x] * AMOUNT_AGI))
-			}
-			case DEX:{
-				new szSmack = (PlayerUpgrades[id][x]<UpgradeMax[x])?(PlayerUpgrades[id][x] * AMOUNT_DEX + 1):(100)
-				new szTemp[10], szCvarTemp[10]
-				num_to_str(szSmack, szTemp, charsmax(szTemp))
-				num_to_str(get_pcvar_num(cv_smack), szCvarTemp, charsmax(szCvarTemp))
-				new Float:szCatch = str_to_float(szTemp) / (str_to_float(szCvarTemp) / 100.0)
-				format(sz_skillInfo, charsmax(sz_skillInfo), "%0.f%% catch", szCatch>100.0?100.0:szCatch)
-			}
-			case DIS:{
-				format(sz_skillInfo, charsmax(sz_skillInfo), "%d%%",
-				(PlayerUpgrades[id][x])?(BASE_DISARM + PlayerUpgrades[id][x] * AMOUNT_DIS):(0))
-			}
-		}
-		format(sz_lang, charsmax(sz_lang), "SJ_%s", UpgradeTitles[x])
-		if((PlayerUpgrades[id][x] + 1) > UpgradeMax[x])
-			format(sz_temp, 63, "\r%L \y-- \r%d / %d \d[%s]%s", id, sz_lang, UpgradeMax[x], UpgradeMax[x], sz_skillInfo, (x==UPGRADES)?("^n"):(""))
-		else if((PlayerUpgrades[id][x] + 1) == UpgradeMax[x] && g_Credits[id] < 2)
-			format(sz_temp, 63, "\d%L \y-- \d%d / %d \d[%s]%s", id, sz_lang, PlayerUpgrades[id][x], UpgradeMax[x], sz_skillInfo, (x==UPGRADES)?("^n"):(""))
-		else
-			format(sz_temp, 63, "\w%L \y-- \w%d / %d \d[%s]%s", id, sz_lang, PlayerUpgrades[id][x], UpgradeMax[x], sz_skillInfo, (x==UPGRADES)?("^n"):(""))
-
-		format(num, 1,"%i",x)
-		menu_additem(menu_upgrade[id], sz_temp, num, 0)
-	}
-	format(num, 1,"%i",x)
-	//if(get_user_used_credits(id) <= STARTING_CREDITS)
-	menu_additem(menu_upgrade[id], "\yUse default skills", num, 0)
-	//else
-		//menu_additem(menu_upgrade[id], "\dUse default skills", num, 0)
-	menu_addblank(menu_upgrade[id], (UPGRADES+1))
-	menu_setprop(menu_upgrade[id], MPROP_EXIT, MEXIT_NEVER)
-	menu_display(id, menu_upgrade[id], 0)
-
-	return PLUGIN_HANDLED
-}
-
-public TNT_Upgrade_Handler(id, menu, item) {
-
-	if(item == MENU_EXIT || !(T <= get_user_team(id) <= CT)){
-		menu_destroy(menu)
-		return PLUGIN_HANDLED
-	}
-
-	new cmd[6], iName[64]
-	new access, callback;
-	menu_item_getinfo(menu, item, access, cmd,5, iName, 63, callback)
-
-	if(!g_Credits[id]) {
-		if(!g_Ready[id])
-			ColorChat(id, GREEN, "^1Type ^4.ready ^1or ^4.reset^1!")
-		return PLUGIN_HANDLED
-	}
-	if(item == UPGRADES){
-		//if(get_user_used_credits(id) < STARTING_CREDITS)
-			//load_skills(id, 0)
-		loadDefaultSkills(id)
-		TNT_BuyUpgrade(id)
-		return PLUGIN_HANDLED
-	}
-
-	new upgrade = str_to_num(cmd)
-	new playerupgrade = PlayerUpgrades[id][upgrade]
-	new maxupgrade = UpgradeMax[upgrade]
-
-	if(playerupgrade != maxupgrade) {
-		if(PlayerUpgrades[id][upgrade] == maxupgrade-1 && g_Credits[id] < 2) {
-			ColorChat(id, RED, "Not enough credits to upgrade %s level %i", UpgradeTitles[upgrade], maxupgrade)
-		}
-		else {
-			playerupgrade++
-
-			g_Credits[id]--
-
-			if(playerupgrade == maxupgrade){
-				g_Credits[id]--
-				play_wav(id, snd_levelup)
-			}
-			switch(upgrade) {
-				case STA: {
-					new stam = playerupgrade * AMOUNT_STA
-					entity_set_float(id, EV_FL_health, float(BASE_HP + stam))
-				}
-				case AGI: {
-					if(!g_sprint[id]) {
-						set_speedchange(id)
-					}
-				}
-			}
-		}
-		PlayerUpgrades[id][upgrade] = playerupgrade
-	}
-
-	if(!g_Credits[id]){
-		if(!g_Ready[id])
-			ColorChat(id, GREEN, "^1Type ^4.ready ^1or ^4.reset^1!")
-		new sz_team = get_user_team(id)
-
-		if(PlayerUpgrades[id][DEX] == UpgradeMax[DEX]){
-			if(!g_GK[sz_team] && (T <= sz_team <= CT)){
-				new sz_name[32]
-				get_user_name(id, sz_name, charsmax(sz_name))
-				g_GK[sz_team] = id
-				client_print(id, print_center, "You are %s goalkeeper!", TeamNames[sz_team])
-				ColorChat(0, (sz_team == T)?RED:BLUE, "^3%s ^1is ^4GOALKEEPER", sz_name)
-				Set_Hat(id)
-			}
-		}
-	}
-	TNT_BuyUpgrade(id)
-
-	return PLUGIN_HANDLED
 }
 
 public TNT_ShowUpgrade(id, player){
@@ -4829,8 +4681,6 @@ public PostGame(){
 		//GAME_MODE = MODE_PREGAME
 		//hltv_disconnect()
 		MoveBall(0, 0, -1)
-		Remove_Hat(g_GK[T])
-		Remove_Hat(g_GK[CT])
 		g_GK[T] = 0
 		g_GK[CT] = 0
 		g_regtype = 0
@@ -4915,73 +4765,6 @@ public CleanUp(){
 
 	for(x = 0; x <= g_count_balls; x++) {
 		PowerPlay[x] = 0
-	}
-}
-
-// GK Hats
-public Remove_Hat(id){
-	if(g_hatent[id] > 0) {
-		remove_entity(g_hatent[id])
-		g_hatent[id] = 0
-	}
-}
-
-public ChangeGK(id){
-	if(GAME_TYPE == TYPE_PUBLIC)
-		return PLUGIN_HANDLED
-
-	new sz_team = get_user_team(id)
-	if(PlayerUpgrades[id][DEX] == UpgradeMax[DEX] && (T <= sz_team <= CT)){
-		if(get_user_team(g_GK[sz_team]) != sz_team || ~IsUserConnected(g_GK[sz_team])){
-			g_GK[sz_team] = 0
-			Remove_Hat(id)
-		}
-		new op_sz_team, sz_name[32]
-		(sz_team == T)?(op_sz_team = CT):(op_sz_team = T)
-		if(g_GK[op_sz_team] == id){
-			g_GK[op_sz_team] = 0
-			Remove_Hat(id)
-			for(new i = 1; i <= g_maxplayers; i++){
-				if(IsUserConnected(i) && get_user_team(i) == op_sz_team && PlayerUpgrades[i][DEX] == UpgradeMax[DEX]){
-					g_GK[op_sz_team] = i
-					Set_Hat(i)
-					client_print(i, print_center, "You are %s goalkeeper!", TeamNames[sz_team])
-					get_user_name(i, sz_name, charsmax(sz_name))
-					ColorChat(0, (op_sz_team == T)?RED:BLUE, "^3%s ^1is ^4GOALKEEPER", sz_name)
-					break
-				}
-			}
-		}
-		if(!g_GK[sz_team] || PlayerUpgrades[g_GK[sz_team]][DEX] != UpgradeMax[DEX]){
-			client_print(id, print_center, "You are %s goalkeeper!", TeamNames[sz_team])
-			g_GK[sz_team] = id
-			get_user_name(id, sz_name, charsmax(sz_name))
-			ColorChat(0, (sz_team == T)?RED:BLUE, "^3%s ^1is ^4GOALKEEPER", sz_name)
-			Set_Hat(id)
-		}
-
-	} else {
-		if(g_GK[T] == id)
-			g_GK[T] = 0
-		if(g_GK[CT] == id)
-			g_GK[CT] = 0
-
-		Remove_Hat(id)
-	}
-	return PLUGIN_HANDLED
-}
-
-public Set_Hat(id) {
-	if(g_hatent[id] < 1) {
-		g_hatent[id] = engfunc(EngFunc_CreateNamedEntity, engfunc(EngFunc_AllocString, "info_target"))
-		if(g_hatent[id] > 0) {
-			set_pev(g_hatent[id], pev_movetype, MOVETYPE_FOLLOW)
-			set_pev(g_hatent[id], pev_aiment, id)
-			set_pev(g_hatent[id], pev_rendermode, kRenderNormal)
-			engfunc(EngFunc_SetModel, g_hatent[id], mdl_mask[get_user_team(id)])
-		}
-	} else {
-		engfunc(EngFunc_SetModel, g_hatent[id], mdl_mask[get_user_team(id)])
 	}
 }
 
@@ -5463,7 +5246,6 @@ public SetAsWatcher(id, team){
 cmdSpectate(id){
 	if((T <= get_user_team(id) <= CT) && get_pdata_int(id, OFFSET_INTERNALMODEL, 5) != 0xFF){
 		cs_set_user_team(id, CS_TEAM_SPECTATOR, CS_DONTCHANGE)
-		Remove_Hat(id)
 		if(g_GK[T] == id){
 			g_GK[T] = 0
 		}
@@ -7259,18 +7041,12 @@ public func_transfer_player(id){
 	get_user_name(id, sz_name, 31)
 	new sz_team = get_user_team(id)
 	if(sz_team == T){
-		for(new i = 1; i <= g_maxplayers; i++){
-		if(IsUserConnected(i) && get_user_team(i) == T)
-			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was transferred to the spectators for being AFK.", sz_name)
-		}
+		ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was transfered to spectators for being AFK.", sz_name)
 	} else {
-	for(new i = 1; i <= g_maxplayers; i++){
-		if(IsUserConnected(i) && get_user_team(i) == CT)
-			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was transferred to the spectators for being AFK.", sz_name)
-		}
+		ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was transfered to spectators for being AFK.", sz_name)
 	}
 
-	log_amx("Player ^"%s^" was transferred to the spectators for being AFK.", sz_name)
+	log_amx("Player ^"%s^" was transfered to the spectators for being AFK.", sz_name)
 	
 	cs_set_user_team(id, CS_TEAM_SPECTATOR)
 	cs_reset_user_model(id)
@@ -7302,17 +7078,13 @@ public func_kick_player(id){
 	get_user_name(id, sz_name, 31)
 	new sz_team = get_user_team(id)
 	if(sz_team == T){
-		for(new i = 1; i <= g_maxplayers; i++){
-		if(IsUserConnected(i) && get_user_team(i) == T)
-			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for being AFK.", sz_name)
-		}
+		ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for being AFK.", sz_name) 
+	} else if(sz_team == CT){
+		ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for being AFK.", sz_name)
 	} else {
-	for(new i = 1; i <= g_maxplayers; i++){
-		if(IsUserConnected(i) && get_user_team(i) == CT)
-			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for being AFK.", sz_name)
-		}
+		ColorChat(0, BLUE, "^4[SJ] ^1- %s was kicked for being AFK.", sz_name)
 	}
-	//log_amx("Player ^"%s^" was kicked for being AFK.", szName)
+	log_amx("Player ^"%s^" was kicked for being AFK.", sz_name)
 }
 
 /**********ANTI-DEVELOPER**********/
@@ -7348,18 +7120,12 @@ public cvar_result(id, const cvar[], const value[])
 		get_user_name(id, sz_name, 31)
 	
 		if(sz_team == T){
-			for(new i = 1; i <= g_maxplayers; i++){
-			if(IsUserConnected(i) && get_user_team(i) == T)
-				ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
-			}
+			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
 		} else {
-			for(new i = 1; i <= g_maxplayers; i++){
-			if(IsUserConnected(i) && get_user_team(i) == CT)
-				ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
-			}
+			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
 		}
-    } 
-}  
+    }
+}
 
 public taskDeveloperCheck2() 
 { 
@@ -7391,18 +7157,12 @@ public cvar_result2(id, const cvar[], const value[])
 		get_user_name(id, sz_name, 31)
 		
 		if(sz_team == T){
-			for(new i = 1; i <= g_maxplayers; i++){
-			if(IsUserConnected(i) && get_user_team(i) == T)
-				ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
-			}
+			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
 		} else {
-			for(new i = 1; i <= g_maxplayers; i++){
-			if(IsUserConnected(i) && get_user_team(i) == CT)
-				ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
-			}
+			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
 		}
-    } 
-}  
+    }
+}
 
 /****************************PLUGIN-END******************************/
 
