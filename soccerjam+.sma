@@ -61,13 +61,13 @@
 *		- sj_scoret - current Terrorists score;
 *		- sj_scorect - current Counter-Terrorists score;
 * 		- sj_idleball (30.0) - idle ball time in seconds;		
-*
+*		- sj_description (0) - shows score in game description
 *
 * -------------------------------------------------------------------------------------------------- *
 *
 * - Change log:
 *
-* - - version 2.0.3 (pub modification):
+* - - version 2.0.4 (pub modification):
 *
 *	Various bugs fixed
 *	Implemented no fall damage (training mode);
@@ -186,8 +186,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.0.3"
-#define LASTCHANGE 	"2017-07-06"
+#define VERSION 	"2.0.4"
+#define LASTCHANGE 	"2017-07-11"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -267,9 +267,6 @@ new TeamId[TEAMS]
 #define MODE_NONE 	0
 #define MODE_PREGAME 	1
 #define MODE_GAME 	2
-#define MODE_HALFTIME 	3
-#define MODE_SHOOTOUT 	4
-#define MODE_OVERTIME 	5
 
 #define TYPE_PUBLIC 	0
 #define TYPE_TOURNAMENT 1
@@ -299,8 +296,6 @@ new GAME_SETS = SETS_DEFAULT
 #define HEALTH_REGEN_AMOUNT 	1
 #define MAX_GOALY_DISTANCE	10000
 #define MAX_GOALY_DELAY		1.0
-
-#define MAX_ENEMY_SHOOTOUT_DIST 1200
 
 // $$ for each action
 #define POINTS_GOALY_CAMP	20
@@ -498,7 +493,7 @@ new scoreboard[128]
 new g_temp[64], g_temp2[64]
 new distorig[2][3] // distance recorder
 
-new msg_deathmsg, msg_statusicon, msg_roundtime, msg_scoreboard
+new msg_deathmsg, msg_statusicon, msg_scoreboard
 new bool:RunOnce
 
 new curvecount[LIMIT_BALLS]
@@ -509,7 +504,7 @@ new g_authid[MAX_PLAYERS + 1][36]
 
 new cv_nogoal, cv_alienzone, cv_alienthink, cv_kick, cv_turbo, cv_reset, cv_resptime, cv_smack,
 cv_ljdelay, cv_huntdist, cv_huntgk, cv_score[3], cv_multiball, cv_lamedist, cv_donate, cv_alienmin, cv_alienmax,
-cv_time, cv_pointmult, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper
+cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper, cv_description
 
 
 new g_cam[MAX_PLAYERS + 1]
@@ -529,14 +524,10 @@ new g_distshot
 new g_Time[MAX_PLAYERS + 1]
 new bool:g_lame = false, bool:g_nogk[TEAMS] = false
 
-new g_votescore[2], g_votechoice[10]
-
 new OFFSET_INTERNALMODEL
 
 new g_Timeleft
 new bool:g_Ready[MAX_PLAYERS + 1]
-new ROUND
-
 new g_maxcredits
 
 new g_GK[TEAMS]
@@ -549,21 +540,14 @@ new g_showhud[MAX_PLAYERS + 1]
 
 static Float:g_StPen[3] = {-224.0, 365.0, 1604.0}
 new Float:g_PenOrig[MAX_PLAYERS + 1][3]
-new Float:g_penstep[TEAMS] = {0.0, 0.0, 0.0, 0.0}
 new freeze_player[MAX_PLAYERS + 1]
 
 new g_regtype
 
 new g_iTeamBall
-new ShootOut
 new timer
 new GoalyPoints[MAX_PLAYERS + 1]
 new Float:GoalyCheckDelay[MAX_PLAYERS + 1]
-//new GoalyCheck[MAX_PLAYERS + 1]
-new candidates[TEAMS]
-new LineUp[MAX_PENSHOOTERS], PenGoals[TEAMS][MAX_PENSHOOTERS]
-new next
-
 new g_Credits[MAX_PLAYERS + 1]
 
 new g_serverip[32]
@@ -581,7 +565,6 @@ new g_userNationalId[MAX_PLAYERS + 1]
 
 new g_PlayerId[MAX_PLAYERS + 1]
 new g_mvprank[MAX_PLAYERS + 1][32]
-new g_saveall = 1
 new g_TempTeamNames[TEAMS][32]
 
 new g_mapname[32]
@@ -941,7 +924,6 @@ public plugin_init(){
 
 	msg_deathmsg 	= get_user_msgid("DeathMsg")
 	msg_statusicon 	= get_user_msgid("StatusIcon")
-	msg_roundtime 	= get_user_msgid("RoundTime")
 	msg_scoreboard 	= get_user_msgid("ScoreInfo")
 
 	OFFSET_INTERNALMODEL = is_amd64_server() ? 152 : 126
@@ -986,15 +968,15 @@ public plugin_init(){
 	cv_donate 	= 	register_cvar("sj_donate", 	"1")
 	cv_chat 	=	register_cvar("sj_chat", 	"1")
 	cv_time 	= 	register_cvar("sj_time", 	"30")
-	cv_pointmult 	=	register_cvar("sj_mpoint",	"3.5")
 	cv_balldist	= 	register_cvar("sj_balldist", 	"1600")
 	cv_players 	= 	register_cvar("sj_players", 	"16")
 	cv_pause	= 	register_cvar("sj_pause", 	"0")
 	cv_regen	=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
 	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
-	//cv_mapchooser	=	register_cvar("sj_mapchooser", "1")
-
+	cv_description		=	register_cvar("sj_description", "0")
+	
+	
 	register_touch("PwnBall", "player", 		"touch_Player")
 	register_touch("PwnBall", "soccerjam_goalnet",	"touch_Goalnet")
 	register_touch("PwnBall", "worldspawn",		"touch_World")
@@ -1022,8 +1004,6 @@ public plugin_init(){
 	register_clcmd("radio2", 	"CurveRight")		// curve right
 	register_clcmd("fullupdate", 	"BlockCommand")		// block fullupdate
 
-	register_concmd("amx_endgame", 	"EndGame", 	ADMIN_KICK, 	"Ends a current match")
-	register_concmd("sj_endgame", 	"EndGame", 	ADMIN_KICK, 	"Ends a current match")
 	register_concmd("showbriefing", "AdminMenu", 	ADMIN_KICK, 	"SJ Admin Menu")
 	register_concmd("nightvision", 	"CameraChanger",_,		"Switches camera view")
 	//register_concmd("sj_update", 	"Update", 	_,  		"Updates plugin")
@@ -1042,7 +1022,7 @@ public plugin_init(){
 
 	GAME_TYPE = TYPE_PUBLIC
 	if(GAME_TYPE == TYPE_PUBLIC){
-		GAME_MODE = MODE_GAME
+		GAME_MODE = MODE_NONE
 		//gTournamentId = 8
 	} else {
 		GAME_MODE = MODE_NONE
@@ -1102,10 +1082,10 @@ public plugin_init(){
 	RegexHandle = regex_compile( "jsonp=(.+)&_=", result, errorstr, charsmax( errorstr ), "i" )
 	szSocket = socket_listen( g_wserverip, 1107, SOCKET_TCP, errorno )
 	set_task( 0.1, "OnSocketReply", _, _, _, "b")*/
-	
+
 	if(!g_current_match)
 		PostGame()
-		
+
 	g_pcvarEnable = register_cvar("sj_balance", "1")
 	g_pcvarImmune = register_cvar("sj_balance_immunity", "1")
 	g_pCvarMessage = register_cvar("sj_balance_message", "Teams Auto Balanced")
@@ -1120,7 +1100,9 @@ public plugin_init(){
 
 public ApplyServerSettings(){
 	server_cmd("mp_timelimit 0")
-	server_cmd("sv_restart 2")
+	server_cmd("sv_restart 5")
+	timer = COUNTDOWN_TIME
+	BeginCountdown()
 }
 	
 public LogEvent_JoinTeam()
@@ -1153,9 +1135,6 @@ public Restart(id, level, cid){
 #define MODE_NONE 	0
 #define MODE_PREGAME 	1
 #define MODE_GAME 	2
-#define MODE_HALFTIME 	3
-#define MODE_SHOOTOUT 	4
-#define MODE_OVERTIME 	5
 
 public task_Restart(){
 	server_cmd("restart")
@@ -1782,9 +1761,6 @@ public StatusDisplay(szEntity){
 
 				//}
 			}
-			if(GAME_TYPE == TYPE_TOURNAMENT){
-				ShowPregameStatus()
-			}
 		}
 
 		case MODE_GAME:{
@@ -1812,107 +1788,6 @@ public StatusDisplay(szEntity){
 						show_hudmessage(id, "%s^n^n^n^n^n^n%s", sz_temp, g_temp)
 					}
 				}
-			} else {
-				if(g_Timeleft == 0) {
-					if(!ROUND) {
-						play_wav(0, snd_whistle)
-						g_Timeleft = -9932
-						scoreboard[0] = 0
-
-						format(scoreboard, 1024, "HALF-TIME")
-						new data[3] = {255, 255, 10}
-						set_task(1.0, "ShowDHud", _, data, 3, "a", 2)
-						round_restart(4.0)
-						//set_task(4.5, "DoHalfTimeReport")
-						for(id = 1; id <= g_maxplayers; id++)
-							g_Ready[id] = false
-						ROUND = 1
-					} else {
-						GAME_MODE = MODE_NONE
-						if(get_pcvar_num(cv_score[T]) > get_pcvar_num(cv_score[CT]))
-							winner = T
-						else if(get_pcvar_num(cv_score[CT]) >get_pcvar_num(cv_score[T]))
-							winner = CT
-
-						play_wav(0, snd_whistle_long)
-
-						if(winner){
-					
-							round_restart(5.0)
-						} else {
-							GAME_MODE  = MODE_SHOOTOUT
-							ShootOut = T
-							remove_task(-13110)
-							ROUND = 2
-							round_restart(6.0)
-							scoreboard[0] = 0
-							new data[3]
-							if(ShootOut == T)
-								data = TeamColors[T]
-							else
-								data = TeamColors[CT]
-							format(scoreboard, charsmax(scoreboard), "- SHOOTOUT -^nTeam %s is up first", TeamNames[ShootOut])
-							set_task(1.0, "ShowDHud", _, data, 3, "a", 3)
-						}
-					}
-					MoveBall(0, 0, -1)
-				} else if(g_Timeleft > 0) {
-					new bteam = get_user_team(g_ballholder[0]>0?g_ballholder[0]:g_last_ballholder[0])
-					new sz_temp[32]
-					new minutes = g_Timeleft / 60
-					new seconds = g_Timeleft % 60
-					format(sz_temp, charsmax(sz_temp), "%i:%s%i", minutes, seconds<10?"0":"", seconds)
-
-					scoreboard[0] = 0
-					for(id = 1; id <= g_maxplayers; id++) {
-						if(~IsUserConnected(id) || g_showhelp[id])
-							continue
-
-						//query_client_cvar(id, "cl_filterstuffcmd", "SetUserConfig")
-
-						format(scoreboard, charsmax(scoreboard), "%s HALF | %s%s^n %s - %i : %i - %s^nPoints: %i^n^n%s^n^n%s",
-						ROUND?"2ND":"1ST", minutes<10?" ":"", sz_temp, TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]),
-						TeamNames[CT], g_Experience[id], g_temp, get_user_team(id)==bteam?g_temp2:"")
-
-						set_hudmessage(20, 255, 20, 1.0, 0.10, 0, 1.0, 1.5, 0.1, 0.1, 1)
-						show_hudmessage(id, "%s", scoreboard)
-
-						message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
-						write_short(g_Timeleft + 1)
-						message_end()
-					}
-
-					if(!get_pcvar_num(cv_pause)){
-						g_Timeleft--
-					}
-				} else if(g_Timeleft != -9932) {
-					if(g_Timeleft < -60)
-						g_Timeleft = -60
-
-					new bteam = get_user_team(g_ballholder[0]>0?g_ballholder[0]:g_last_ballholder[0])
-					new timedisplay[32]
-					new seconds = abs(g_Timeleft) % 60
-					format(timedisplay, 31, ":%s%i", seconds<10?"0":"", seconds)
-					scoreboard[0] = 0
-					for(id = 1; id <= g_maxplayers; id++) {
-						if(~IsUserConnected(id))
-							continue
-
-						format(scoreboard, 1024, "Infinite Time %s^n %s - %i : %i - %s^nPoints: %i^n^n%s^n^n%s", timedisplay,
-						TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT],
-						g_Experience[id], g_temp, get_user_team(id)==bteam?g_temp2:"")
-
-						set_hudmessage(20, 255, 20, 1.0, 0.10, 0, 1.0, 1.5, 0.1, 0.1, 1)
-						show_hudmessage(id, "%s", scoreboard)
-
-						message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
-						write_short(abs(g_Timeleft) + 1)
-						message_end()
-					}
-					g_Timeleft++
-					if(g_Timeleft == 0)
-						g_Timeleft = -60
-				}
 			}
 		}
 
@@ -1921,148 +1796,6 @@ public StatusDisplay(szEntity){
 	set_pev(szEntity, pev_nextthink, halflife_time() + gTimerEntThink)
 
 	return PLUGIN_HANDLED
-}
-
-ShowPregameStatus(){
-	new teamready[TEAMS][512], teamLen[TEAMS], id, team, sz_temp[32], x
-	new player_name[32], teamcount[TEAMS], readycount[TEAMS], sz_temp2[32], sz_rank[32]
-	new sz_checkClanId[TEAMS], sz_checkClanId2[TEAMS], sz_checkclan[TEAMS][32], sz_checkclantwo[TEAMS][32], sz_checkteamclan[TEAMS], sz_checkteamclantwo[TEAMS]
-	new sz_nationalteam[32]
-	for(id = 1; id <= g_maxplayers; id++){
-		if(IsUserConnected(id) && ~IsUserBot(id)){
-			team = get_user_team(id)
-			if(team != T && team != CT)
-				continue
-			get_user_name(id, player_name, 31)
-
-			format(sz_temp, charsmax(sz_temp), "")
-			format(sz_temp2, charsmax(sz_temp2), "")
-			format(sz_rank, charsmax(sz_rank), "")
-			format(sz_nationalteam, charsmax(sz_nationalteam), "")
-
-			if(id == g_GK[team]){
-				format(sz_temp, charsmax(sz_temp), " [GK]")
-			}
-			if(g_mvprank[id][0] != EOS){
-				format(sz_rank, charsmax(sz_rank), "#%s | ", g_mvprank[id])
-			}
-			if(g_userClanName[id][0] != EOS){
-				format(sz_temp2, charsmax(sz_temp2), " | %s", g_userClanName[id])
-			}
-			if(sz_checkteamclan[team] != -1){
-				if(!sz_checkteamclan[team] || equal(g_userClanName[id], sz_checkclan[team])){
-					format(sz_checkclan[team], 31, "%s", g_userClanName[id])
-					sz_checkClanId[team] = g_userClanId[id]
-					sz_checkteamclan[team]++
-				} else if (!sz_checkteamclantwo[team] || equal(g_userClanName[id], sz_checkclantwo[team])){
-					format(sz_checkclantwo[team], 31, "%s", g_userClanName[id])
-					sz_checkClanId2[team] = g_userClanId[id]
-					sz_checkteamclantwo[team]++
-				} else {
-					sz_checkteamclan[team] = -1
-				}
-			}
-
-			teamcount[team]++
-			if(g_userCountry_3[id][0] != EOS){
-				format(sz_nationalteam, charsmax(sz_nationalteam), "(%s) ", g_userCountry_3[id])
-			}
-
-			if(g_Ready[id]){
-				readycount[team]++
-				teamLen[team] += format(teamready[team][teamLen[team]], 511 - teamLen[team], "%s%s%s%s%s^n", sz_nationalteam, sz_rank, player_name, sz_temp, sz_temp2)
-			} else {
-				teamLen[team] += format(teamready[team][teamLen[team]], 511 - teamLen[team], "         %s%s%s%s%s^n", sz_nationalteam, sz_rank, player_name, sz_temp, sz_temp2)
-			}
-		}
-	}
-	for(team = T; team <= CT; team++){
-		if(GAME_MODE == MODE_PREGAME && g_saveall){
-			if((teamcount[team] < 5) || (sz_checkteamclan[team] > 1 && sz_checkteamclantwo[team] > 1)){
-				sz_checkteamclan[team] = -1
-			}
-			if(sz_checkteamclan[team] != -1){
-				if((sz_checkteamclan[team] >= 4 && sz_checkteamclantwo[team] == 1 && g_GK[team] > 0 && g_userClanId[g_GK[team]] != sz_checkClanId[team]) || sz_checkteamclan[team] > 4){
-					if(sz_checkclan[team][0] != EOS){
-						format(TeamNames[team], 31, "%s", sz_checkclan[team])
-						TeamId[team] = sz_checkClanId[team]
-					} else {
-						format(TeamNames[team], 31, team==T?"T":"CT")
-						(team==T)?(TeamId[team]=-1):(TeamId[team]=-2)
-					}
-				} else if((sz_checkteamclantwo[team] >= 4 && sz_checkteamclan[team] == 1 && g_GK[team] > 0 && g_userClanId[g_GK[team]] != sz_checkClanId2[team]) || sz_checkteamclantwo[team] > 4){
-					if(sz_checkclantwo[team][0] != EOS){
-						format(TeamNames[team], 31, "%s", sz_checkclantwo[team])
-						TeamId[team] = sz_checkClanId2[team]
-					} else {
-						format(TeamNames[team], 31, team==T?"T":"CT")
-						(team==T)?(TeamId[team]=-1):(TeamId[team]=-2)
-					}
-
-				} else {
-					format(TeamNames[team], 31, team==T?"T":"CT")
-					(team==T)?(TeamId[team]=-1):(TeamId[team]=-2)
-				}
-			} else {
-				format(TeamNames[team], 31, team==T?"T":"CT")
-				(team==T)?(TeamId[team]=-1):(TeamId[team]=-2)
-			}
-		}
-
-	}
-
-	new required = get_pcvar_num(cv_players)
-
-	new missing[64]
-	if(teamcount[T] <= 3 && teamcount[CT] <= 3 && teamcount[SPECTATOR] < 5){
-		if(teamcount[T] == 1 || teamcount[CT] == 1)
-			required = 0
-	}
-
-	for(x = 1; x < 3; x++){
-		if(teamcount[x] < required) {
-			format(missing, charsmax(missing), "Missing: %i", required - teamcount[x])
-		} else if(teamcount[x] != readycount[x]) {
-			format(missing, charsmax(missing), "Waiting: %i", teamcount[x] - readycount[x])
-		} else if(teamcount[x] == readycount[x]) {
-			format(missing, charsmax(missing), "Ready")
-		}
-
-		set_hudmessage(TeamColors[x][0], TeamColors[x][1], TeamColors[x][2], 0.60, x==T?0.2:0.55, 0, 0.5, 0.4, 0.4, 0.4, x==T?2:1)
-		show_hudmessage(0, "%sTEAM %s | %s^n%s", x==1?"^n^n^n":"", TeamNames[x], missing, teamready[x])
-	}
-
-	new sz_start
-	for(x = 1; x < 3; x++){
-		if(teamcount[x] >= required && teamcount[x] == readycount[x])
-			sz_start++
-
-		if(teamcount[T] != 5 || teamcount[CT] != 5) {
-			g_regtype = 0
-		} else if(equal(TeamNames[T], "T") || equal(TeamNames[CT], "CT")) {
-			g_regtype = 1
-		} else {
-			g_regtype = 2
-		}
-	}
-
-	if(sz_start == 2){
-		if(GAME_MODE == MODE_PREGAME) {
-			CleanUp()
-			g_iTeamBall = 0
-			if(g_regtype == 2){
-				set_pcvar_num(cv_chat, 0)
-				new sz_name[32]
-				get_user_name(0, sz_name, charsmax(sz_name))
-				ColorChat(0, RED, "^4[SJ] ^1- ^1Global chat is ^3OFF! ^1(ADMIN: %s)", sz_name)
-			}
-		}
-
-		BeginCountdown()
-
-		GAME_MODE = MODE_NONE
-	}
-
 }
 
 public ShowDHud(sz_colors[]){
@@ -2185,8 +1918,6 @@ public touch_Player(ball, player){
 		return PLUGIN_HANDLED
 	}
 	new playerteam = get_user_team(player)
-	if(!(T <= playerteam <= CT) || (freeze_player[player] && player != LineUp[next]))
-		return PLUGIN_HANDLED
 
 	remove_task(55555 + i)
 
@@ -2287,14 +2018,6 @@ public touch_Player(ball, player){
 
 			stolen = 1
 
-			if(GAME_MODE == MODE_SHOOTOUT) {
-				new oteam = (ShootOut == T ? CT:T)
-				if(playerteam == oteam) {
-					MoveBall(0, 0, -1)
-					SetAsWatcher(LineUp[next], oteam)
-				}
-			}
-
 			for(new k = 0; k < MAX_ASSISTERS; k++){
 				g_assisters[k] = 0
 				g_assisttime[k] = 0.0
@@ -2383,7 +2106,7 @@ public touch_Goalnet(ball, goalpost){
 	new goalent = GoalEnt[team]
 	//set_pev(goalpost, pev_solid, SOLID_NOT)
 	if(goalpost != goalent && g_last_ballholder[i] > 0 && !g_ballholder[i]){
-		if(!get_pcvar_num(cv_nogoal) && GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME && GAME_MODE != MODE_NONE){
+		if(!get_pcvar_num(cv_nogoal) && GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_NONE){
 			new Float:ccorig[3], Float:gnorig[3]
 			new ccorig2[3]
 
@@ -2424,7 +2147,7 @@ public touch_Goalnet(ball, goalpost){
 			new sz_temp[MAX_ASSISTERS * 45]
 			format(sz_temp, charsmax(sz_temp), "^3%s", g_last_ballholdername[i])
 
-			if(!g_count_balls && GAME_MODE != MODE_SHOOTOUT){
+			if(!g_count_balls){
 				// register assists
 				new sz_assist_name[MAX_ASSISTERS][32]
 				new sz_assist_num
@@ -2469,7 +2192,6 @@ public touch_Goalnet(ball, goalpost){
 					continue
 
 				if(GAME_TYPE == TYPE_PUBLIC){
-					//sql_updatePlayerStats(i)
 					if(get_user_team(i) == team)
 						g_Experience[i] += POINTS_TEAMGOAL
 				}
@@ -2505,10 +2227,6 @@ public touch_Goalnet(ball, goalpost){
 				case 5: play_wav(0, snd_bday)
 				case 6: play_wav(0, snd_boomchaka)
 			}
-
-			if(GAME_MODE == MODE_OVERTIME){
-				winner = team
-			}
 			if(winner){
 				play_wav(0, snd_whistle_long)
 				format(scoreboard, charsmax(scoreboard), "%L", LANG_SERVER, "SJ_TEAMWIN", TeamNames[winner])
@@ -2528,13 +2246,9 @@ public touch_Goalnet(ball, goalpost){
 				}
 				round_restart(5.0)
 			} else if(g_count_scores == g_count_balls + 1) {
-				if(GAME_MODE != MODE_SHOOTOUT){
-					if(g_Timeleft > 12){
-						set_task(3.0, "SvRestart", -13110)
-						StatusDisplay_Restart()
-					}
-				} else {
-					PenGoals[team][next] = 1
+				if(g_Timeleft > 12){
+					set_task(3.0, "SvRestart", -13110)
+					StatusDisplay_Restart()
 				}
 				g_count_scores = 0
 			}
@@ -2560,7 +2274,7 @@ public touch_Goalnet(ball, goalpost){
 			set_task(0.1, "Done_Handler", -3312 - i)
 		}
 	} else if(goalpost == goalent) {
-		if(get_pcvar_num(cv_nogoal) || GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_HALFTIME || GAME_MODE == MODE_NONE){
+		if(get_pcvar_num(cv_nogoal) || GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_NONE){
 			new florig[3], Float:borig[3]
 			pev(ball, pev_origin, borig)
 			if(task_exists(-3312 - i)){
@@ -2695,10 +2409,6 @@ public vgui_jointeamtwo(id){
 }
 
 bool:join_team(id, key=-1) {
-	if(GAME_MODE == MODE_NONE){
-		ColorChat(id, RED, "^4[SJ] ^1- ^3You can not join the game right now!")
-		return true
-	}
 	new team = get_user_team(id)
 	if(key == 4){
 		ColorChat(id, GREY, "Please choose a team manually!")
@@ -2714,7 +2424,7 @@ bool:join_team(id, key=-1) {
 			ColorChat(id, key?BLUE:RED, "^4[SJ] ^1- You are not member of clan ^3%s^1!", TeamNames[key + 1])
 			engclient_cmd(id, "chooseteam")
 			return true
-		} else if(GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME) {
+		} else if(GAME_MODE != MODE_PREGAME) {
 			new sz_count
 			for(new i = 1; i <= g_maxplayers; i++)
 				if(IsUserConnected(i) && ~IsUserBot(i) && equal(TeamNames[key + 1], g_userClanName[i]) && get_user_team(i) == (key + 1))
@@ -2731,17 +2441,7 @@ bool:join_team(id, key=-1) {
 
 		return false
 	}
-	if(GAME_MODE == MODE_SHOOTOUT){
-		for(new i = 0; i < MAX_PENSHOOTERS; i++)
-			if(id == LineUp[i] && candidates[key + 1] == 0)
-				return false
-
-		if(candidates[key + 1] == id)
-			return false
-
-		ColorChat(id, RED, "^4[SJ] ^1- ^3You can not join this team during shootout!")
-		return true
-	} else if(GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME) {
+	if(GAME_MODE != MODE_PREGAME) {
 		new sz_count
 		for(new i = 1; i <= g_maxplayers; i++)
 			if(IsUserConnected(i) && ~IsUserBot(i) && get_user_team(i) == key + 1)
@@ -2782,7 +2482,7 @@ public PlayerDamage(victim, inflictor, attacker, Float:damage, damagetype){
 			}
 		}
 	}
-	if(GAME_MODE != MODE_GAME && GAME_MODE != MODE_OVERTIME){
+	if(GAME_MODE != MODE_GAME){
 		if(get_entity_distance(victim, Mascots[get_user_team(victim)]) < get_pcvar_num(cv_alienzone)
 		|| freeze_player[victim] || freeze_player[attacker]){
 			if(!task_exists(attacker - 2432)){
@@ -2798,7 +2498,7 @@ public PlayerDamage(victim, inflictor, attacker, Float:damage, damagetype){
 		}
 	}
 
-	if(i == g_count_balls + 1 && (GAME_MODE == MODE_GAME || GAME_MODE == MODE_OVERTIME)){
+	if(i == g_count_balls + 1 && (GAME_MODE == MODE_GAME)){
 		if(!task_exists(attacker - 2432)){
 			set_task(2.0, "Done_Handler", attacker - 2432)
 			play_wav(attacker, "barney/donthurtem")
@@ -2840,7 +2540,7 @@ public PlayerDamage(victim, inflictor, attacker, Float:damage, damagetype){
 				}
 			} else if(!task_exists(attacker - 2432)) {
 				new sz_vteam = get_user_team(victim)
-				if(victim == g_GK[sz_vteam] && (GAME_MODE == MODE_GAME || GAME_MODE == MODE_OVERTIME)){
+				if(victim == g_GK[sz_vteam] && (GAME_MODE == MODE_GAME)){
 					new Float:sz_origin[3]
 					pev(victim, pev_origin, sz_origin)
 					new sz_name [32]
@@ -2929,17 +2629,8 @@ public Event_StartRound(){
 			set_cvar_string("amx_nextmap", "-")
 			set_task(35.0, "ChangeMap", 9811)
 			MultiBall(0 ,0, 0)
-			//SwitchGameSettings(0, SETS_TRAINING)
-		} else {
-			//sql_saveall()
-			PostGame()
 		}
 	} else {
-		if(ROUND == 3){
-			g_iTeamBall = 0
-			GAME_MODE = MODE_OVERTIME
-		}
-
 		if(GAME_TYPE == TYPE_PUBLIC){
 			SetupRound()
 		} else {
@@ -2955,20 +2646,10 @@ public Event_StartRound(){
 				}
 				case MODE_GAME: {
 					if(g_Timeleft == -9932) {
-						GAME_MODE = MODE_HALFTIME
-
 						g_iTeamBall = 0
 					} else {
 						SetupRound()
 					}
-				}
-				case MODE_SHOOTOUT: {
-					set_task(1.0, "PostSetupShootoutRound")
-
-				}
-				case MODE_OVERTIME: {
-					g_Timeleft = -60
-					SetupRound()
 				}
 			}
 		}
@@ -2997,7 +2678,14 @@ public SetupRound(){
 		if(g_iTeamBall == 0)
 			MoveBall(1, 0, i)
 		//else if(contain(g_mapname, "sj_downunder") > -1 || contain(g_mapname, "sj_westwood") > -1 || contain(g_mapname, "click21" ) > -1 || contain(g_mapname, "futsal" ) > -1){
-		else if(contain(g_mapname, "soccerjam") > -1 || contain(g_mapname, "sj_trix_zone") > -1 || contain(g_mapname, "sansiro") > -1 || contain(g_mapname, "danger_final") > -1 || contain(g_mapname, "mxsoccer_small") > -1 || contain(g_mapname, "ak0") > -1  || contain(g_mapname, "marakana") > -1){
+		else if(contain(g_mapname, "soccerjam") > -1 
+			|| contain(g_mapname, "sj_trix_zone") > -1 
+			|| contain(g_mapname, "sansiro") > -1 
+			|| contain(g_mapname, "danger_final") > -1 
+			|| contain(g_mapname, "mxsoccer_small") > -1 
+			|| contain(g_mapname, "ak0") > -1  
+			|| contain(g_mapname, "marakana") > -1
+			|| contain(g_mapname, "hood_final") > -1){
 			MoveBall(0, g_iTeamBall==T?CT:T, i)
 		} else {
 			MoveBall(1, 0, i)
@@ -3014,98 +2702,6 @@ public SetupRound(){
 	play_wav(0, snd_prepare)
 
 	g_count_scores = 0
-}
-public DoHalfTimeReport(){
-	new Float:sz_points
-
-	for(new id = 1; id <= g_maxplayers; id++){
-		if(IsUserConnected(id) && ~IsUserBot(id)){
-			sz_points = float(g_Experience[id])
-			sz_points /= 100.0
-			sz_points /= get_pcvar_float(cv_pointmult)
-			g_showhud[id] = 1
-			if(sz_points){
-				g_Credits[id] = floatround(sz_points)
-				if(sz_points < g_Credits[id])
-					g_Credits[id]--
-
-				if(g_Credits[id] > g_maxcredits)
-					g_Credits[id] = g_maxcredits
-			}
-		}
-	}
-}
-
-public ShootoutSetup(team){
-	new id, t, oteam = (team == T ? CT : T)
-	next = 0
-	candidates[oteam] = 0
-	new goaly = 0
-
-	for(new k = 0; k < MAX_ASSISTERS; k++){
-		g_assisters[k] = 0
-		g_assisttime[k] = 0.0
-	}
-	for(id = 1; id <= g_maxplayers; id++){
-		t = get_user_team(id)
-		if(IsUserConnected(id)){
-			if(t == T){
-				g_PenOrig[id][1] = g_StPen[1] + g_penstep[T]
-				g_penstep[T] += PEN_STAND_RADIUS
-
-			} else if(t == CT) {
-				g_PenOrig[id][1] = -(g_StPen[1] + g_penstep[CT])
-				g_penstep[CT] += PEN_STAND_RADIUS
-			}
-			SetAsWatcher(id, oteam)
-			if(t == oteam){
-				if(g_GK[oteam] && goaly == g_GK[oteam])
-					continue
-				if(!goaly || id == g_GK[oteam]) {
-					goaly = id
-				} else if(PlayerUpgrades[id][DEX] > PlayerUpgrades[goaly][DEX]) {
-					goaly = id
-				} else if(PlayerUpgrades[id][DEX] == PlayerUpgrades[goaly][DEX]) {
-					if(MadeRecord[id][GOALSAVE] > MadeRecord[goaly][GOALSAVE])
-						goaly = id
-				}
-			} else if(t == team) {
-				if(next < MAX_PENSHOOTERS)
-					LineUp[next++] = id
-			}
-		}
-	}
-	new i = 0
-	while(next && next < MAX_PENSHOOTERS){
-		LineUp[next++] = LineUp[i++]
-	}
-	next--
-	new name[32]
-
-	if(goaly){
-		candidates[oteam] = goaly
-		get_user_name(goaly, name, 31)
-		ColorChat(0, (oteam == T)?RED:BLUE,"^3%s ^1is ^4GOALKEEPER",name)
-		freeze_player[goaly] = false
-		entity_set_float(goaly, EV_FL_takedamage, 0.0)
-	}
-}
-
-public PostSetupShootoutRound() {
-	ShootoutSetup(ShootOut)
-	if(next >= 0){
-		MoveBall(1, 0, -1)
-		new id = LineUp[next]
-		cs_user_spawn(id)
-		entity_set_origin(id, BallSpawnOrigin)
-		freeze_player[id] = true
-		timer = SHOTCLOCK_TIME
-
-		set_task(5.0, "ShotClock", 0)
-	} else {
-		timer = 0
-		set_task(5.0, "ShotClock", 0)
-	}
 }
 
 public ChangeMap(){
@@ -3153,7 +2749,7 @@ public PlayerKilled(victim, killer, shouldgib){
 	remove_task(victim + 412)
 	set_task(get_pcvar_float(cv_resptime), "RespawnPlayer", victim + 412)
 
-	if(GAME_MODE == MODE_GAME || GAME_MODE == MODE_OVERTIME){
+	if(GAME_MODE == MODE_GAME){
 		//g_PlayerDeaths[victim]++
 		Event_Record(victim, DEATH)
 		if(killer != victim && 1 <= killer <= 31)
@@ -3175,8 +2771,7 @@ public RespawnPlayer(id){
 	id = id - 412
 
 	if (~IsUserConnected(id) || is_user_alive(id)
-	|| get_pdata_int(id, OFFSET_INTERNALMODEL, 5) == 0xFF || !(T <= get_user_team(id) <= CT)
-	|| (GAME_MODE == MODE_SHOOTOUT && id != candidates[get_user_team(id)])){
+	|| get_pdata_int(id, OFFSET_INTERNALMODEL, 5) == 0xFF || !(T <= get_user_team(id) <= CT)){
 		remove_task(id + 412)
 		set_task(get_pcvar_float(cv_resptime), "RespawnPlayer", id + 412)
 		return
@@ -3185,7 +2780,7 @@ public RespawnPlayer(id){
 	remove_task(id + 412)
 
 	set_pev(id, pev_deadflag, DEAD_RESPAWNABLE)
-
+	
 	dllfunc(DLLFunc_Think, id)
 	if(~IsUserAlive(id))
 		dllfunc(DLLFunc_Spawn, id)
@@ -3220,6 +2815,7 @@ public PlayerSpawnedSettings(id, szEntity){
 |			| ************************************************************************ |
 +-----------------------+--------------------------------------------------------------------------+
 */
+
 public Turbo(id){
 	if(IsUserAlive(id) && !seconds[id])
 		g_sprint[id] = 1
@@ -3403,32 +2999,6 @@ public CurveLeft(id){
 +-----------------------+--------------------------------------------------------------------------+
 */
 
-public EndGame(id, level, cid) {
-	if(!cmd_access(id, level, cid, 0) || GAME_TYPE == TYPE_PUBLIC)
-		return PLUGIN_HANDLED
-
-	new name[64]
-	get_user_name(id, name, charsmax(name))
-
-	ColorChat(0, GREEN, "^4[SJ] ^1- End Game (ADMIN: %s)", name)
-
-	MoveBall(0, 0, 0)
-	g_current_match = 0
-	gMatchId = 0
-	g_saveall = 1
-	set_pcvar_num(cv_score[T], 0)
-	set_pcvar_num(cv_score[CT], 0)
-	remove_task(9999)
-
-	ROUND = -1
-
-	set_task(3.0, "PostGame")
-
-	round_restart(3.0)
-
-	return PLUGIN_HANDLED
-}
-
 public ChatCommands(id){
 	new said[192]
 	read_args(said, 192)
@@ -3437,7 +3007,7 @@ public ChatCommands(id){
 	parse(said, sz_cmd, 31, info, 31)
 	get_user_name(id, sz_name, charsmax(sz_name))
 	new sz_team = get_user_team(id)
-	if(GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_HALFTIME) {
+	if(GAME_MODE == MODE_PREGAME) {
 		if((equal(sz_cmd, ".ready") || equal(sz_cmd, "/ready")) && T <= sz_team <= CT) {
 			if(g_Credits[id]) {
 				ColorChat(id, RED, "You must use all your credits before becoming ready!")
@@ -3486,7 +3056,7 @@ public ChatCommands(id){
 	}
 	if(contain(sz_cmd, ".stats") != -1 || contain(sz_cmd, "/stats") != -1){
 		if(!info[0]){
-			if(GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME){
+			if(GAME_MODE != MODE_PREGAME){
 				ShowMenuStats(id)
 			} else {
 				(g_showhud[id])?(g_showhud[id] = 0):(g_showhud[id] = 1)
@@ -3692,7 +3262,7 @@ public ChatCommands_team(id){
 	parse(said, sz_cmd, 31, info, 31)
 	get_user_name(id, sz_name, 31)
 	new sz_team = get_user_team(id)
-	if(GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_HALFTIME) {
+	if(GAME_MODE == MODE_PREGAME) {
 		if((equal(sz_cmd, ".ready") || equal(sz_cmd, "/ready")) && (T <= sz_team <= CT)){
 			if(g_Credits[id]) {
 				ColorChat(id, RED, "You must use all your credits before becoming ready!")
@@ -3759,7 +3329,7 @@ public ChatCommands_team(id){
 	}
 	if(contain(sz_cmd, ".stats") != -1 || contain(sz_cmd, "/stats") != -1){
 		if(!info[0]){
-			if(GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME) {
+			if(GAME_MODE != MODE_PREGAME) {
 				ShowMenuStats(id)
 			} else {
 				(g_showhud[id])?(g_showhud[id] = 0):(g_showhud[id] = 1)
@@ -4063,7 +3633,7 @@ public Upgrade_Handler(id, menu, item){
 		}
 		
 	if(item == 5){
-		if(GAME_MODE != MODE_PREGAME && GAME_MODE != MODE_HALFTIME) {
+		if(GAME_MODE != MODE_PREGAME) {
 			ShowMenuStats(id)
 		} else {
 			(g_showhud[id])?(g_showhud[id] = 0):(g_showhud[id] = 1)
@@ -4198,14 +3768,6 @@ public TNT_ShowUpgrade(id, player){
 				g_Ready[id]?menu_additem(menu_upgrade[id], "\rWait"):menu_additem(menu_upgrade[id], "\yReady")
 				menu_additem(menu_upgrade[id], "\ySet as default")
 			}
-			case MODE_HALFTIME:{
-				g_Ready[id]?menu_additem(menu_upgrade[id], "\rWait"):menu_additem(menu_upgrade[id], "\yReady")
-				//if(get_user_used_credits(id) <= STARTING_CREDITS)
-				//menu_additem(menu_upgrade[id], "\yUse default skills")
-				//else
-					//menu_additem(menu_upgrade[id], "\dUse default skills")
-
-			}
 			default:{
 				menu_additem(menu_upgrade[id], "\yTop stats")
 			}
@@ -4231,10 +3793,6 @@ public TNT_ShowUpgrade_Handler(id, menu, item){
 					(g_Ready[id])?(g_Ready[id]=false):(g_Ready[id]=true)
 					TNT_ShowUpgrade(id, id)
 				}
-				case MODE_HALFTIME:{
-					(g_Ready[id])?(g_Ready[id]=false):(g_Ready[id]=true)
-					TNT_ShowUpgrade(id, id)
-				}
 				default:{
 					ShowMenuStats(id)
 				}
@@ -4249,10 +3807,6 @@ public TNT_ShowUpgrade_Handler(id, menu, item){
 			switch(GAME_MODE){
 				case MODE_PREGAME:{
 					saveDefaultSkills(id)
-					TNT_ShowUpgrade(id, id)
-				}
-				case MODE_HALFTIME:{
-					loadDefaultSkills(id)
 					TNT_ShowUpgrade(id, id)
 				}
 				default:{}
@@ -4498,7 +4052,7 @@ stock CreateMascot(team){
 
 public think_Alien(mascot){
 
-	if((!g_count_balls && (GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_HALFTIME)) || get_pcvar_num(cv_pause)){
+	if((!g_count_balls && (GAME_MODE == MODE_PREGAME)) || get_pcvar_num(cv_pause)){
 		set_pev(mascot, pev_nextthink, halflife_time() + get_pcvar_float(cv_alienthink))
 		return PLUGIN_HANDLED
 	}
@@ -4536,12 +4090,6 @@ public think_Alien(mascot){
 			if(sz_team == team){
 				if(GAME_TYPE == TYPE_PUBLIC && (sz_gametime - GoalyCheckDelay[id] >= MAX_GOALY_DELAY) && get_pcvar_num(cv_regen)){
 					goaly_checker(id)
-				}
-				if(GAME_MODE == MODE_SHOOTOUT && sz_team != ShootOut && id == candidates[sz_team]){
-					if(sz_dist >= MAX_ENEMY_SHOOTOUT_DIST){
-						spawn(id)
-						entity_set_float(id, EV_FL_takedamage, 0.0)
-					}
 				}
 			}
 		}
@@ -4677,30 +4225,8 @@ public PostGame(){
 		g_current_match = get_systime()
 		//set_task(30.0, "VoteStart")
 		
-	} else {
-		//GAME_MODE = MODE_PREGAME
-		//hltv_disconnect()
-		MoveBall(0, 0, -1)
-		g_GK[T] = 0
-		g_GK[CT] = 0
-		g_regtype = 0
-		g_saveall = 1
-
-		new x
-		for(new id = 1; id <= g_maxplayers; id++){
-			save_stats(id)
-			g_Ready[id] = false
-			//g_PlayerDeaths[id] = 0
-			freeze_player[id] = false
-			//g_showhud[id] = 1
-			g_Credits[id] = STARTING_CREDITS
-			g_Experience[id] = 0
-			for(x = 1; x <= UPGRADES; x++)
-				PlayerUpgrades[id][x] = 0
-		}
-		g_current_match = 0
-		gMatchId = 0
 	}
+	
 	server_cmd("mp_timelimit 0")
 }
 
@@ -4723,9 +4249,6 @@ public CleanUp(){
 		freeze_player[x] = false
 		//g_PlayerDeaths[x] = 0
 		g_MVP_points[x] = 0
-		g_PenOrig[x][0] = g_StPen[0]
-		g_PenOrig[x][1] = 0.0
-		g_PenOrig[x][2] = g_StPen[2]
 		for(m = 1; m <= RECORDS; m++)
 			MadeRecord[x][m] = 0
 	}
@@ -4735,20 +4258,7 @@ public CleanUp(){
 
 	TrieClear(gTrieStats)
 
-	(g_regtype == 0)?(g_saveall = 1):(g_saveall = 0)
-
 	g_Time[0] = 0
-
-	g_penstep[T] = 0.0
-	g_penstep[CT] = 0.0
-	candidates[T] = 0
-	candidates[CT] = 0
-
-	for(x = 0; x < MAX_PENSHOOTERS; x++){
-		LineUp[x] = 0
-		PenGoals[T][x] = 0
-		PenGoals[CT][x] = 0
-	}
 
 	format(g_MVP_name, charsmax(g_MVP_name), "")
 	g_MVP = 0
@@ -4756,12 +4266,10 @@ public CleanUp(){
 
 	g_current_match = get_systime()
 	winner = 0
-	ROUND = 0
 	timer = COUNTDOWN_TIME
 	g_Timeleft = (get_pcvar_num(cv_time) * 60)
 	set_pcvar_num(cv_score[T], 0)
 	set_pcvar_num(cv_score[CT], 0)
-	ShootOut = 0
 
 	for(x = 0; x <= g_count_balls; x++) {
 		PowerPlay[x] = 0
@@ -4771,60 +4279,23 @@ public CleanUp(){
 public FWD_GameDescription(){
 	new sz_temp[32]
 	if(GAME_TYPE == TYPE_PUBLIC){
-		format(sz_temp, charsmax(sz_temp), "%s - %d : %d - %s",
-		TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-	}
-	else{
-		switch(GAME_MODE){
-			case MODE_PREGAME:
-				format(sz_temp, charsmax(sz_temp), "FULLTIME | %s - %d : %d - %s",
-				g_TempTeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), g_TempTeamNames[CT])
-			case MODE_NONE:{
-				format(sz_temp, charsmax(sz_temp), "STARTING GAME")
-			}
-			case MODE_GAME:{
-				new sz_time[32]
-				new minutes = g_Timeleft / 60
-				new seconds = g_Timeleft % 60
-				format(sz_time, charsmax(sz_time), "%i:%s%i", minutes, seconds<10?"0":"", seconds)
-				if(ROUND == 0)
-					format(sz_temp, charsmax(sz_temp), "1st | %s | %s - %d : %d - %s",
-					sz_time, TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-				else
-					format(sz_temp, charsmax(sz_temp), "2nd | %s | %s - %d : %d - %s",
-					sz_time, TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-			}
-			case MODE_HALFTIME:
-				format(sz_temp, charsmax(sz_temp), "HALFTIME | %s - %d : %d - %s",
-				TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-			case MODE_SHOOTOUT:
-				format(sz_temp, charsmax(sz_temp), "SHOOTOUT | %s - %d : %d - %s",
-				TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-			case MODE_OVERTIME:{
-				new sz_time[32]
-				new minutes = g_Timeleft / 60
-				new seconds = g_Timeleft % 60
-				format(sz_time, charsmax(sz_time), "%i:%s%i", minutes, seconds<10?"0":"", seconds)
-				format(sz_temp, charsmax(sz_temp), "OT #%d | %s |%s - %d : %d - %s",
-				ROUND - 1, sz_time, TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
-			}
+		if(get_pcvar_num(cv_description)){
+			format(sz_temp, charsmax(sz_temp), "%s - %d : %d - %s",
+			TeamNames[T], get_pcvar_num(cv_score[T]), get_pcvar_num(cv_score[CT]), TeamNames[CT])
+		} else {
+			format(sz_temp, charsmax(sz_temp), "SoccerJam+")
 		}
 	}
-
-	//format(sz_temp, charsmax(sz_temp), "Soccerjam+")
 	forward_return(FMV_STRING, sz_temp)
-
-
 	return FMRES_SUPERCEDE
 }
 
 public FWD_CmdStart( id, uc_handle, seed ) {
     if(get_uc(uc_handle, UC_Impulse) == 100) { // change 201 to your impulse.
     	if(g_showhud[id]){
-		(g_showhud[id]==1)?(g_showhud[id] = 2):(g_showhud[id] = 1)
-	}
+			(g_showhud[id]==1)?(g_showhud[id] = 2):(g_showhud[id] = 1)
+		}
     }
-
     return FMRES_IGNORED;
 }
 
@@ -4834,7 +4305,6 @@ public FWD_AddToFullpack(es_handle, e, id, host, flags, player){
 			SideJump[id] = 0
 		}
 	}
-
 	return FMRES_IGNORED
 }
 
@@ -5100,149 +4570,6 @@ public SvRestart(){
 	set_task(1.0, "Done_Handler", -4789)
 }
 
-public g_votescoreMenu(id){
-	new sz_temp[128]
-	format(sz_temp, charsmax(sz_temp), "\y[SJ] \w- %L?", id, "SJ_GOL")
-	new menu = menu_create(sz_temp, "g_votescoreMenu_handler")
-
-	for(new i = 1; i < g_votechoice[0]; i++){
-		format(sz_temp, charsmax(sz_temp), "%d", g_votechoice[i])
-		menu_additem(menu, sz_temp)
-	}
-
-	menu_setprop(menu, MPROP_EXIT, MEXIT_NEVER)
-
-	menu_display(id, menu)
-
-	return PLUGIN_HANDLED
-}
-
-public g_votescoreMenu_handler(id, menu, item){
-	if(item == MENU_EXIT){
-		menu_destroy(menu)
-		return PLUGIN_HANDLED
-	}
-
-	new data[6], sz_name[64], name[32]
-	new access, callback
-	menu_item_getinfo(menu, item, access, data, charsmax(data), sz_name, charsmax(sz_name), callback)
-	get_user_name(id, name, 31)
-
-	g_votescore[0] += str_to_num(sz_name)
-	g_votescore[1]++
-
-	menu_destroy(menu)
-	return PLUGIN_HANDLED
-}
-
-public ShotClock(){
-	if(timer <= 0){
-		timer = SHOTCLOCK_TIME
-		if(next >= 0 && !freeze_player[LineUp[next]] && IsUserConnected(LineUp[next])){
-			SetAsWatcher(LineUp[next], ShootOut)
-			if(PenGoals[get_user_team(LineUp[next])][next] == 0){
-				PenGoals[get_user_team(LineUp[next])][next] = 2
-			}
-		}
-		next--
-
-		if(next >= 0){
-			new shooter = LineUp[next]
-			if(~IsUserConnected(shooter)){
-				timer = 0
-				ShotClock()
-			} else {
-				cs_user_spawn(shooter)
-			}
-			MoveBall(1, 0, 0)
-
-			entity_set_origin(shooter, BallSpawnOrigin)
-
-			seconds[shooter] = 0
-			g_sprint[shooter] = 0
-			PressedAction[shooter] = 0
-			//entity_set_float(shooter,EV_FL_maxspeed, 0.1)
-			freeze_player[shooter] = true
-			set_task(3.0, "ShotClock", 0)
-
-		} else {
-			for(new id = 1; id <= g_maxplayers; id++)
-				freeze_player[id] = false
-
-			MoveBall(0, 0, -1)
-			entity_set_float(candidates[ShootOut==T?CT:T], EV_FL_takedamage, 1.0)
-			if(ShootOut == 2){
-				round_restart(6.0)
-
-				if(get_pcvar_num(cv_score[T]) > get_pcvar_num(cv_score[CT])){
-					winner = T
-				} else if(get_pcvar_num(cv_score[CT]) > get_pcvar_num(cv_score[T])) {
-					winner = CT
-				}
-
-				if(winner){
-					GAME_MODE = MODE_NONE
-
-				} else {
-					play_wav(0, snd_whistle)
-					ShootOut = 0
-					ROUND = 3
-					GAME_MODE = MODE_NONE
-					scoreboard[0] = 0;
-					format(scoreboard, 1024, "- OVERTIME -^nFirst team to score wins!")
-					new data[3] = {255, 255, 10}
-					set_task(1.0, "ShowDHud", _, data, 3, "a", 6)
-				}
-			} else {
-				round_restart(5.0)
-				ShootOut = 2
-				scoreboard[0] = 0;
-				format(scoreboard, 1024, "Team %s is next to shootout! ", TeamNames[ShootOut])
-				new data[3]
-				if(ShootOut == T){
-					data = TeamColors[T]
-				} else {
-					data = TeamColors[CT]
-				}
-				set_task(1.0, "ShowDHud", _, data, 3, "a", 3)
-			}
-		}
-	} else {
-		if(IsUserConnected(LineUp[next]) && freeze_player[LineUp[next]]){
-			play_wav(0, snd_whistle)
-			set_speedchange(LineUp[next], 0.0)
-			freeze_player[LineUp[next]] = false
-
-			new goaly = candidates[ShootOut==T?CT:T]
-			seconds[goaly] = 0
-			g_sprint[goaly] = 0
-			set_speedchange(goaly)
-		}
-
-		timer--
-		set_task(0.9, "ShotClock", 0)
-	}
-}
-
-public SetAsWatcher(id, team){
-	new Float:ang[3]
-
-	if(g_PenOrig[id][1] == 0.0 || !(T <= get_user_team(id) <= CT)){
-		cmdSpectate(id)
-		return PLUGIN_HANDLED
-	}
-
-
-	freeze_player[id] = true
-
-	entity_set_origin(id, g_PenOrig[id])
-
-	entity_get_vector(Mascots[team], EV_VEC_v_angle, ang)
-	entity_set_vector(id, EV_VEC_v_angle, ang)
-
-	return PLUGIN_HANDLED
-}
-
 cmdSpectate(id){
 	if((T <= get_user_team(id) <= CT) && get_pdata_int(id, OFFSET_INTERNALMODEL, 5) != 0xFF){
 		cs_set_user_team(id, CS_TEAM_SPECTATOR, CS_DONTCHANGE)
@@ -5264,30 +4591,25 @@ public round_restart(Float:x){
 	remove_task(-4566)
 }
 public BeginCountdown(){
-	if(!timer){
-		timer = COUNTDOWN_TIME
-
-		g_Timeleft = (get_pcvar_num(cv_time) * 60)
-		GAME_MODE = MODE_GAME
-
+	new output[32]
+	num_to_word(timer, output, 31)
+	//timer = 10
+	client_cmd(0, "spk vox/%s.wav", output)
+	if(timer > (COUNTDOWN_TIME / 2)) {
+		set_hudmessage(20, 250, 20, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
 	} else {
-		new output[32]
-		num_to_word(timer, output, 31)
-		//client_cmd(0, "spk vox/%s.wav", output)
-
-		if(timer > (COUNTDOWN_TIME / 2)) {
-			set_hudmessage(20, 250, 20, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
-		} else {
-			set_hudmessage(255, 0, 0, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
-		}
-
-		show_hudmessage(0, "GAME BEGINS IN:^n%i", timer)
-
-		if(timer == 1)
-			round_restart(1.0)
-
-		timer--
-		set_task(0.9, "BeginCountdown", 9999)
+		set_hudmessage(255, 0, 0, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
+	}
+	show_hudmessage(0, "GAME BEGINS IN:^n%i", timer)
+	
+	if(timer == 1)
+		round_restart(1.0)
+		
+	timer--
+	set_task(0.9, "BeginCountdown", 9999)
+	if(timer == 0){
+		remove_task(9999)
+		GAME_MODE = MODE_GAME
 	}
 }
 
@@ -5505,7 +4827,7 @@ public MultiBall(id, level, cid){
 		}
 		if(GAME_TYPE == TYPE_PUBLIC)
 			MoveBall(1, 0, 0)
-		else if(GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_HALFTIME || GAME_MODE == MODE_NONE)
+		else if(GAME_MODE == MODE_PREGAME || GAME_MODE == MODE_NONE)
 			MoveBall(0, 0, 0)
 	} else {
 		new sz_cvar = get_pcvar_num(cv_multiball)
@@ -5796,7 +5118,7 @@ public HelpOff(id){
 */
 
 public Event_Record(id, recordtype){
-	if(id && IsUserConnected(id) && !get_pcvar_num(cv_pause) && (GAME_MODE == MODE_GAME || GAME_MODE == MODE_OVERTIME || GAME_MODE == MODE_SHOOTOUT)){
+	if(id && IsUserConnected(id) && !get_pcvar_num(cv_pause) && (GAME_MODE == MODE_GAME)){
 		if(recordtype != DISTANCE){
 			MadeRecord[id][recordtype]++
 			TempRecord[id][recordtype]++
@@ -6967,6 +6289,7 @@ public cmd_joinclass(id){
 	g_vOrigin[id] = {0, 0, 0}
 	g_iAFKTime[id] = 0
 	g_iWarn[id] = 0
+	g_iAFKTime[id]++
 }
 
 public cmd_say(id){
@@ -7003,6 +6326,7 @@ public func_afk_check(taskid){
 						g_vOrigin[id][2] = vOrigin[2]
 						g_iAFKTime[id] = 0
 						g_iWarn[id] = 0
+						g_iAFKTime[id]++
 					}
 					else{
 						g_iAFKTime[id]++
@@ -7017,6 +6341,7 @@ public func_afk_check(taskid){
 						g_fLastActivity[id] = fLastActivity
 						g_iAFKTime[id] = 0
 						g_iWarn[id] = 0
+						g_iAFKTime[id]++
 					}
 					else{
 						g_iAFKTime[id] = floatround((get_gametime() - fLastActivity) / FREQ_AFK_CHECK)
