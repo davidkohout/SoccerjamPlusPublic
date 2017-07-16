@@ -581,6 +581,7 @@ new Trie:gTrieStats
 
 new aball
 new is_kickball
+
 /*
 +-----------------------+--------------------------------------------------------------------------+
 |			| ************************************************************************ |
@@ -1100,7 +1101,6 @@ public plugin_init(){
 
 public ApplyServerSettings(){
 	server_cmd("mp_timelimit 0")
-	server_cmd("sv_restart 5")
 	timer = COUNTDOWN_TIME
 	BeginCountdown()
 }
@@ -1142,7 +1142,7 @@ public task_Restart(){
 
 public Version(id){
 	console_print(id, "SoccerJam+ v.%s | %s", VERSION, LASTCHANGE)
-	console_print(id, "Original version by OneEyed. Improved by Doondook.")
+	console_print(id, "Original version by OneEyed. Updateed by Doondook & DK.")
 	console_print(id, "Official web-site: http://sj-pro.com")
 
 	return PLUGIN_HANDLED
@@ -2230,6 +2230,7 @@ public touch_Goalnet(ball, goalpost){
 			if(winner){
 				play_wav(0, snd_whistle_long)
 				format(scoreboard, charsmax(scoreboard), "%L", LANG_SERVER, "SJ_TEAMWIN", TeamNames[winner])
+				log_amx("[SJ] - TEAM %s WON! The map will be changed.", TeamNames[winner])
 
 				set_task(1.0, "ShowDHud", _, TeamColors[winner], 3, "a", 1)
 				set_task(1.6, "ShowDHud2", _, TeamColors[winner], 3, "a", 1)
@@ -2677,7 +2678,6 @@ public SetupRound(){
 		CreateBall(i)
 		if(g_iTeamBall == 0)
 			MoveBall(1, 0, i)
-		//else if(contain(g_mapname, "sj_downunder") > -1 || contain(g_mapname, "sj_westwood") > -1 || contain(g_mapname, "click21" ) > -1 || contain(g_mapname, "futsal" ) > -1){
 		else if(contain(g_mapname, "soccerjam") > -1 
 			|| contain(g_mapname, "sj_trix_zone") > -1 
 			|| contain(g_mapname, "sansiro") > -1 
@@ -3862,7 +3862,7 @@ public Meter(){
 		if(i != g_count_balls + 1){
 			if(GAME_MODE != MODE_PREGAME ){
 			set_hudmessage(0, 255, 0, -1.0, 0.75, 0, 0.0, 0.6, 0.0, 0.0, 4)
-			sz_len = format(sprintText, charsmax(sprintText), "%L ^n[", id, "SJ_CURVE")
+			sz_len = format(sprintText, charsmax(sprintText), " - CURVE - ^n[", id)
 
 			for(x = DIRECTIONS; x >= ndir; x--){
 				(x==0)?
@@ -4083,7 +4083,7 @@ public think_Alien(mascot){
 					indist[inNum++] = id
 				}
 			}
-			if(sz_dist < 500) {
+			if(sz_dist < 600) {
 					g_nogk[team] = false
 					sz_nogk = false
 				}
@@ -4593,9 +4593,11 @@ public round_restart(Float:x){
 public BeginCountdown(){
 	new output[32]
 	num_to_word(timer, output, 31)
-	//timer = 10
 	client_cmd(0, "spk vox/%s.wav", output)
+	MoveBall(0, 0, 0)
+	
 	if(timer > (COUNTDOWN_TIME / 2)) {
+
 		set_hudmessage(20, 250, 20, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
 	} else {
 		set_hudmessage(255, 0, 0, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
@@ -4604,7 +4606,7 @@ public BeginCountdown(){
 	
 	if(timer == 1)
 		round_restart(1.0)
-		
+	
 	timer--
 	set_task(0.9, "BeginCountdown", 9999)
 	if(timer == 0){
@@ -5843,7 +5845,7 @@ if(file_exists(configfile) && get_cvar_num("sj_mapchooser")){
 				{
 					ColorChat(0, GREEN, "^4[SJ] ^1- %s has voted to Rock the Vote.",name)
 					ColorChat(0, GREEN, "^4[SJ] ^1- The Vote has been Rocked!")
-
+					log_amx("[SJ] - Vote has been rocked. The map will be changed.")
 					make_menu(1)
 
 					voterocked2=true
