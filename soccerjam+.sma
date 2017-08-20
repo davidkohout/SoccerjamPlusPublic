@@ -187,7 +187,7 @@
 
 #define PLUGIN 		"SoccerJam+"
 #define VERSION 	"2.0.4"
-#define LASTCHANGE 	"2017-07-11"
+#define LASTCHANGE 	"2017-08-20"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -211,13 +211,13 @@ new g_bIsBot, g_bIsAlive, g_bIsConnected
 #define IsUserConnected(%1) 	g_bIsConnected & 1<<(%1 & (MAX_PLAYERS - 1))
 
 #define TEAMS 		4
-#define ScoreLimit "SCORE_LIMIT"
 
 #define T		1
 #define CT		2
 #define SPECTATOR 	3
 #define UNASSIGNED 	0
 
+#define ScoreLimit "SCORE_LIMIT"
 /*
 +-----------------------+--------------------------------------------------------------------------+
 |			| ************************************************************************ |
@@ -227,7 +227,7 @@ new g_bIsBot, g_bIsAlive, g_bIsConnected
 */
 
 // Skills bonuses
-#define AMOUNT_STA 		100	// Health
+#define AMOUNT_STA 		20	// Health
 #define AMOUNT_STR 		25	// Stronger kicking
 #define AMOUNT_AGI 		13	// Faster Speed
 #define AMOUNT_DEX 		18	// Better Catching
@@ -969,13 +969,13 @@ public plugin_init(){
 	cv_donate 	= 	register_cvar("sj_donate", 	"1")
 	cv_chat 	=	register_cvar("sj_chat", 	"1")
 	cv_time 	= 	register_cvar("sj_time", 	"30")
-	cv_balldist	= 	register_cvar("sj_balldist", 	"1600")
+	cv_balldist	= 	register_cvar("sj_balldist", 	"1000")
 	cv_players 	= 	register_cvar("sj_players", 	"16")
 	cv_pause	= 	register_cvar("sj_pause", 	"0")
 	cv_regen	=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
 	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
-	cv_description		=	register_cvar("sj_description", "0")
+	cv_description		=	register_cvar("sj_description", "1")
 	
 	
 	register_touch("PwnBall", "player", 		"touch_Player")
@@ -3885,7 +3885,7 @@ public Meter(){
 		set_hudmessage(0, 255, 0, -1.0, 0.85, 0, 0.0, 0.6, 0.0, 0.0, 3)
 
 		//format(szTitle, charsmax(szTitle), "- SPEED: %d -", get_speed(id))
-		format(szTitle, charsmax(szTitle), "- SPEED: %3.2f - ", speedh)
+		format(szTitle, charsmax(szTitle), "- SPEED: %3.1f - ", speedh)
 
 		if(sec > 30){
 			sec -= get_pcvar_num(cv_turbo)
