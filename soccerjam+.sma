@@ -3101,7 +3101,9 @@ public ChatCommands(id){
 			return PLUGIN_HANDLED_MAIN
 	} else if(equal(sz_cmd, "/whois") || equal(sz_cmd, ".whois")
 		|| equal(sz_cmd, "/players") || equal(sz_cmd, ".players")
-		|| equal(sz_cmd, "/users") || equal(sz_cmd, ".users")){
+		|| equal(sz_cmd, "/users") || equal(sz_cmd, ".users")
+		|| equal(sz_cmd, "/admin") || equal(sz_cmd, ".admin")
+		|| equal(sz_cmd, "/admins") || equal(sz_cmd, ".admins")){
 		WhoIs(id)
 		if(!get_pcvar_num(cv_chat))
 			return PLUGIN_HANDLED_MAIN
@@ -3363,7 +3365,9 @@ public ChatCommands_team(id){
 		CameraChanger(id)
 	} else if(equal(sz_cmd, "/whois") || equal(sz_cmd, ".whois")
 		|| equal(sz_cmd, "/players") || equal(sz_cmd, ".players")
-		|| equal(sz_cmd, "/users") || equal(sz_cmd, ".users")){
+		|| equal(sz_cmd, "/users") || equal(sz_cmd, ".users")
+		|| equal(sz_cmd, "/admin") || equal(sz_cmd, ".admin")
+		|| equal(sz_cmd, "/admins") || equal(sz_cmd, ".admins")){
 		WhoIs(id)
 	} else if(equal(sz_cmd, "/first")|| equal(sz_cmd, ".first")
 		|| equal(sz_cmd, "/firstperson") || equal(sz_cmd, ".firstperson")){
@@ -4491,12 +4495,20 @@ public WhoIs(id){
 	get_user_ip(0, ip, charsmax(ip))
 
 	format(title, charsmax(title), "Players List")
-
+	
+/*
 	len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://sj-pro.com/css/flags.css'></head>")
 	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background=^"http://sj-pro.com/img/main.jpg^"><center>")
 	len += format(plist[len], charsmax(plist) - len, "<font color=#FFB000 size=3><b>%s<br>%s<br><br>", sz_name, ip)
 	len += format(plist[len], charsmax(plist) - len, "<table border=0 width=90%% cellpadding=0 cellspacing=6>")
 	len += format(plist[len], charsmax(plist) - len, "<tr style='color:green;font-weight:bold;text-decoration:underline;'><td>PLAYER<td>TEAM<td>LOCATION")
+*/
+
+	//len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://sj-pro.com/css/flags.css'></head>")
+	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background=^"http://sj-pro.com/img/main.jpg^"><center>")
+	len += format(plist[len], charsmax(plist) - len, "<font color=#FFB000 size=3><b>%s<br>%s<br><br>", sz_name, ip)
+	len += format(plist[len], charsmax(plist) - len, "<table border=0 width=90%% cellpadding=0 cellspacing=6>")
+	len += format(plist[len], charsmax(plist) - len, "<tr style='color:green;font-weight:bold;text-decoration:underline;'><td>PLAYER<td><td>LOCATION")
 
 	for(new i = 1; i <= g_maxplayers; i++) {
 		if(~IsUserConnected(i) || IsUserBot(i))
@@ -4506,7 +4518,7 @@ public WhoIs(id){
 
 		len += format(plist[len], charsmax(plist) - len, "<tr><td>")
 		if(g_userCountry_2[i][0] != EOS){
-			len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
+			//len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
 			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_userClanName[i], g_userCountry[i], g_userCity[i])
 		} else {
 			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_userClanName[i], "N/A")
