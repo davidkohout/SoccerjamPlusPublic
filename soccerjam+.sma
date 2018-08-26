@@ -969,7 +969,7 @@ public plugin_init(){
 	cv_donate 	= 	register_cvar("sj_donate", 	"1")
 	cv_chat 	=	register_cvar("sj_chat", 	"1")
 	cv_time 	= 	register_cvar("sj_time", 	"30")
-	cv_balldist	= 	register_cvar("sj_balldist", 	"1000")
+	cv_balldist	= 	register_cvar("sj_balldist", 	"1400")
 	cv_players 	= 	register_cvar("sj_players", 	"16")
 	cv_pause	= 	register_cvar("sj_pause", 	"0")
 	cv_regen	=	register_cvar("sj_regen",	"0")
@@ -4364,7 +4364,7 @@ public client_connect(id){
 
 public client_putinserver(id){
 	g_iCount[id] = 0 
-	cs_set_user_team(id, CS_TEAM_SPECTATOR)
+	cs_set_user_team(id, CS_TEAM_SPECTATOR) //prevent spec-doublechat bug
 	ClearUserAlive(id)
 	SetUserConnected(id)
 	if(is_user_bot(id) || is_user_hltv(id) || !id){
@@ -4378,24 +4378,6 @@ public client_putinserver(id){
 	g_sprint[id] = 0
 	PressedAction[id] = 0
 	g_showhelp[id] = false
-	/*
-	for(new k = UPGRADES; k; k--){
-		PlayerUpgrades[i][k] = 0
-	}
-	PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
-	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
-	PlayerUpgrades[i][STA] = UpgradeMax[STA]
-	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
-	
-	
-	for(new x = 1; x <= UPGRADES; x++){
-		PlayerUpgrades[id][x] = 0
-		PlayerUpgrades[x][DEX] = UpgradeMax[DEX]
-		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
-		PlayerUpgrades[x][STA] = UpgradeMax[STA]
-		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
-	}
-	*/
 
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
@@ -5649,10 +5631,15 @@ public saveDefaultSkills(id){
 public loadDefaultSkills(id){
 	//ResetSkills(id)
 
+	
 	g_Credits[id] -= STARTING_CREDITS
 
 	for(new i = 1; i <= UPGRADES; i++){
-		PlayerUpgrades[id][i] = PlayerDefaultUpgrades[id][i]
+		//PlayerUpgrades[id][i] = PlayerDefaultUpgrades[id][i]
+	PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[i][STA] = UpgradeMax[STA]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
 	}
 
 	if(IsUserAlive(id)){
