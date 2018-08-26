@@ -67,7 +67,7 @@
 *
 * - Change log:
 *
-* - - version 2.0.4 (pub modification):
+* - - version 2.1.0) (pub modification):
 *
 *	Various bugs fixed
 *	Implemented no fall damage (training mode);
@@ -186,8 +186,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.0.4"
-#define LASTCHANGE 	"2017-08-20"
+#define VERSION 	"2.1.0"
+#define LASTCHANGE 	"2018-08-26"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -886,13 +886,13 @@ public plugin_init(){
 	if(contain(g_mapname, "soccer") == -1 && contain(g_mapname, "sj") == -1){
 		set_fail_state("[SJ] - SoccerJam works only at sj_ maps!")
 	}
-
+	
 	if(contain(g_mapname, "soccerjam") > -1){
 		CreateGoalNets()
 		CreateWall()
 		CreateWall2()
+		CreateWall3()
 	}
-
 	
 	register_logevent("event_round_end", 2, "0=World triggered", "1=Round_End")
 	register_logevent("event_round_start", 2, "0=World triggered", "1=Round_Start")
@@ -1010,7 +1010,7 @@ public plugin_init(){
 	//register_concmd("sj_update", 	"Update", 	_,  		"Updates plugin")
 	register_concmd("amx_restart", 	"Restart",	ADMIN_KICK, 	"Restart server")
 	register_concmd("sj_version", 	"Version",	_, 		"Shows plugin's version info")
-	register_concmd("jointeam", 	"BlockCommand")
+	//register_concmd("jointeam", 	"BlockCommand")
 
 	register_menucmd(register_menuid("Team_Select",1), (1<<0)|(1<<1)|(1<<4)|(1<<5), "team_select")
 
@@ -2387,6 +2387,7 @@ public team_select(id, key) {
 	return PLUGIN_CONTINUE
 }
 
+/*
 public vgui_jointeamone(id){
 	if(join_team(id, 0)){
 		return PLUGIN_HANDLED
@@ -2408,6 +2409,7 @@ public vgui_jointeamtwo(id){
 
 	return PLUGIN_HANDLED
 }
+*/
 
 bool:join_team(id, key=-1) {
 	new team = get_user_team(id)
@@ -2817,7 +2819,8 @@ public PlayerSpawnedSettings(id, szEntity){
 */
 
 public Turbo(id){
-	if(IsUserAlive(id) && !seconds[id])
+	if(is_user_alive(id))
+	//if(IsUserAlive(id) && !seconds[id])
 		g_sprint[id] = 1
 
 	return PLUGIN_HANDLED
@@ -4023,6 +4026,32 @@ CreateWall2() {
 	}
 }
 
+CreateWall3() {
+	new wall = create_entity("func_wall")
+	if(wall)
+	{
+		new Float:orig[3]
+		new Float:MinBox[3], Float:MaxBox[3]
+		entity_set_string(wall,EV_SZ_classname,"Blocker")
+		entity_set_model(wall, "models/chick.mdl")
+
+		entity_set_int(wall, EV_INT_solid, SOLID_BBOX)
+		entity_set_int(wall, EV_INT_movetype, MOVETYPE_NONE)
+
+		MinBox[0] = -72.0;	MinBox[1] = -100.0;	MinBox[2] = -72.0
+		MaxBox[0] =  72.0;	MaxBox[1] =  100.0;	MaxBox[2] =  72.0
+
+		entity_set_vector(wall, EV_VEC_mins, MinBox)
+		entity_set_vector(wall, EV_VEC_maxs, MaxBox)
+
+		orig[0] = 2355.0
+		orig[1] = 1696.0
+		orig[2] = 1604.0
+		entity_set_origin(wall,orig)
+		set_entity_visibility(wall, 0)
+	}
+}
+
 stock CreateMascot(team){
 	new mascot = create_entity("info_target")
 	if(mascot){
@@ -4345,6 +4374,24 @@ public client_putinserver(id){
 	g_sprint[id] = 0
 	PressedAction[id] = 0
 	g_showhelp[id] = false
+	/*
+	for(new k = UPGRADES; k; k--){
+		PlayerUpgrades[i][k] = 0
+	}
+	PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[i][STA] = UpgradeMax[STA]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	
+	
+	for(new x = 1; x <= UPGRADES; x++){
+		PlayerUpgrades[id][x] = 0
+		PlayerUpgrades[x][DEX] = UpgradeMax[DEX]
+		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
+		PlayerUpgrades[x][STA] = UpgradeMax[STA]
+		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
+	}
+	*/
 
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
@@ -4352,7 +4399,7 @@ public client_putinserver(id){
 		if(TopPlayer[0][i] == id)
 			TopPlayer[0][i] = 0
 	}
-
+	
 	get_user_authid(id, g_authid[id], 35)
 	get_user_ip(id, g_userip[id], 31, 1)
 
@@ -6083,15 +6130,36 @@ public VoteTally(num)
 			set_cvar_string("qq_lastlastmap",mapname)
 			get_mapname(mapname,31)
 			set_cvar_string("qq_lastmap",mapname)
-			ColorChat(0, GREEN, "^4[SJ] ^1- Voting Over. Nextmap will be %s.",maps[winner[0]])
+
+			
+			/*
+			if(voterocked2){
+				if(equali(winner[0],currentmap)){
+				ColorChat(0, GREEN,"^4[SJ] ^1- Chosen map is the same as the current one.")
+				voterocked=get_gametime()
+				//return PLUGIN_CONTINUE
+				}
+			}
+			*/
+			
 			if(!voterocked2)
 			{
+				ColorChat(0, GREEN, "^4[SJ] ^1- Voting Over. Nextmap will be %s.",maps[winner[0]])
 				set_cvar_string("amx_nextmap",maps[winner[0]])
 				set_task(1.0,"change_level",winner[0],"",0,"d")
 			}
 			else
 			{
-				set_task(5.0,"change_level",winner[0])
+				//set_task(5.0,"change_level",winner[0])
+				if(equali(maps[winner[0]],currentmap)){
+					ColorChat(0, GREEN,"^4[SJ] ^1- Chosen map is the same as the current one.")
+					voterocked=get_gametime()
+				}
+				else
+				{
+					ColorChat(0, GREEN, "^4[SJ] ^1- Voting Over. Nextmap will be %s.",maps[winner[0]])
+					set_task(5.0,"change_level",winner[0])
+				}
 			}
 			format(cur_nextmap,31,"%s",maps[winner[0]])
 		}
