@@ -503,7 +503,7 @@ new Float:BallSpinDirection[LIMIT_BALLS][3]
 new g_authid[MAX_PLAYERS + 1][36]
 
 new cv_nogoal, cv_alienzone, cv_alienthink, cv_kick, cv_turbo, cv_reset, cv_resptime, cv_smack,
-cv_ljdelay, cv_huntdist, cv_huntgk, cv_score[3], cv_multiball, cv_lamedist, cv_donate, cv_alienmin, cv_alienmax,
+cv_ljdelay, cv_huntdist, cv_score[3], cv_multiball, cv_lamedist, cv_donate, cv_alienmin, cv_alienmax,
 cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper, cv_description
 
 
@@ -529,9 +529,6 @@ new OFFSET_INTERNALMODEL
 new g_Timeleft
 new bool:g_Ready[MAX_PLAYERS + 1]
 new g_maxcredits
-
-new g_GK[TEAMS]
-new bool:g_GK_immunity[MAX_PLAYERS + 1]
 
 new g_MVP_points[MAX_PLAYERS + 1], g_MVP, g_MVP_name[32]
 //new gTopPlayers[5]
@@ -949,7 +946,6 @@ public plugin_init(){
 
 	//cv_type		=	register_cvar("sj_type", 	"0")
 	cv_huntdist 	=	register_cvar("sj_huntdist", 	"0")
-	cv_huntgk	=	register_cvar("sj_huntgk", 	"5.0")
 	cv_lamedist 	=	register_cvar("sj_lamedist", 	"90")
 	cv_score[0] 	= 	register_cvar("sj_score", 	"ScoreLim[31]")
 	cv_score[T] 	= 	register_cvar("sj_scoret", 	"0")
@@ -1005,7 +1001,7 @@ public plugin_init(){
 	register_clcmd("radio2", 	"CurveRight")		// curve right
 	register_clcmd("fullupdate", 	"BlockCommand")		// block fullupdate
 
-	register_concmd("showbriefing", "AdminMenu", 	ADMIN_KICK, 	"SJ Admin Menu")
+	register_concmd("showbriefing", "AdminMenu", 	ADMIN_IMMUNITY, 	"SJ Admin Menu")
 	register_concmd("nightvision", 	"CameraChanger",_,		"Switches camera view")
 	//register_concmd("sj_update", 	"Update", 	_,  		"Updates plugin")
 	register_concmd("amx_restart", 	"Restart",	ADMIN_KICK, 	"Restart server")
@@ -2541,31 +2537,6 @@ public PlayerDamage(victim, inflictor, attacker, Float:damage, damagetype){
 						//client_print(victim, print_chat, "%L", victim, "SJ_DISED", aname)
 					}
 				}
-			} else if(!task_exists(attacker - 2432)) {
-				new sz_vteam = get_user_team(victim)
-				if(victim == g_GK[sz_vteam] && (GAME_MODE == MODE_GAME)){
-					new Float:sz_origin[3]
-					pev(victim, pev_origin, sz_origin)
-					new sz_name [32]
-					get_user_name(attacker, sz_name, charsmax(sz_name))
-					switch (sz_vteam){
-						case T:{
-							if(1763.0 <= sz_origin[0] <= 2068.0 && -308.0 <= sz_origin[1] <= 308.0){
-								set_task(2.0, "Done_Handler", attacker - 2432)
-								set_task(get_pcvar_float(cv_huntgk), "Done_Handler", -5005)
-								ColorChat(0, BLUE, "%s ^1is hunting GK!", sz_name)
-							}
-						}
-						case CT:{
-							if(-2519.0 <= sz_origin[0] <= -2212.0 && -308.0 <= sz_origin[1] <= 308.0){
-								set_task(2.0, "Done_Handler", attacker - 2432)
-								set_task(get_pcvar_float(cv_huntgk), "Done_Handler", -5006)
-								ColorChat(0, RED, "%s ^1is hunting GK!", sz_name)
-							}
-						}
-					}
-
-				}
 			}
 		}
 	} else {
@@ -2757,7 +2728,7 @@ public PlayerKilled(victim, killer, shouldgib){
 		if(killer != victim && 1 <= killer <= 31)
 			Event_Record(killer, HUNT)
 	}
-
+	g_iAFKTime[victim]++
 	return PLUGIN_HANDLED
 }
 
@@ -2767,11 +2738,13 @@ public PlayerSpawned(id){
 
 	remove_task(id + 412)
 	set_task(0.1, "PlayerSpawnedSettings", id)
+
+	g_iAFKTime[id]++
 }
 
 public RespawnPlayer(id){
 	id = id - 412
-
+	
 	if (~IsUserConnected(id) || is_user_alive(id)
 	|| get_pdata_int(id, OFFSET_INTERNALMODEL, 5) == 0xFF || !(T <= get_user_team(id) <= CT)){
 		remove_task(id + 412)
@@ -4354,16 +4327,16 @@ public FwdImpulse_201( const id ) {
 
 public client_connect(id){
 	set_user_info(id, "_vgui_menus", "0")
-	
+	/*
 	g_bSpec[id] = false
 	g_bSpecAccess[id] = false
 	g_vOrigin[id] = {0, 0, 0}
 	g_iAFKTime[id] = 0
 	g_iWarn[id] = 0
+	*/
 }
 
 public client_putinserver(id){
-	g_iCount[id] = 0 
 	cs_set_user_team(id, CS_TEAM_SPECTATOR) //prevent spec-doublechat bug
 	ClearUserAlive(id)
 	SetUserConnected(id)
@@ -4374,17 +4347,27 @@ public client_putinserver(id){
 
 	g_cam[id] = false
 	seconds[id] = 0
-	g_GK_immunity[id] = false
 	g_sprint[id] = 0
 	PressedAction[id] = 0
-	g_showhelp[id] = false
+	//g_showhelp[id] = false
 
+	/*
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
 		TempRecord[id][i] = 0
 		if(TopPlayer[0][i] == id)
 			TopPlayer[0][i] = 0
 	}
+	*/
+	
+	for(new i = 1; i <= UPGRADES; i++){
+		//PlayerUpgrades[id][i] = PlayerDefaultUpgrades[id][i]
+	PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[i][STA] = UpgradeMax[STA]
+	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	}
+
 	
 	get_user_authid(id, g_authid[id], 35)
 	get_user_ip(id, g_userip[id], 31, 1)
@@ -4442,20 +4425,23 @@ public client_putinserver(id){
 	ColorChat(0, GREY, "^4-> ^3%s^1%s%s ^4has joined", sz_temp, sz_name, is_user_admin(id)?" ^3[ADMIN]":"")
 
 	remove_task(id - 8122)
-
+	
+/*
 	if(!task_exists(97753)){
 		//set_task(5.0, "sql_updateServerInfo", 97753)
 	}
-
+*/
 	set_task(get_pcvar_float(cv_resptime), "RespawnPlayer", id + 412)
 
 	client_cmd(id, "cl_forwardspeed 1000")
 	client_cmd(id, "cl_backspeed 1000")
 	client_cmd(id, "cl_sidespeed 1000")
 
-	g_bValid[id] = bool:!is_user_hltv(id)
-	load_stats(id)
-	
+	//g_bValid[id] = bool:!is_user_hltv(id)
+	//load_stats(id)
+	//new x
+	set_task(0.1, "WhoIs", id)
+	g_iCount[id] = 0 
 	return PLUGIN_HANDLED
 }
 
@@ -4490,7 +4476,7 @@ public WhoIs(id){
 	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background=^"http://sj-pro.com/img/main.jpg^"><center>")
 	len += format(plist[len], charsmax(plist) - len, "<font color=#FFB000 size=3><b>%s<br>%s<br><br>", sz_name, ip)
 	len += format(plist[len], charsmax(plist) - len, "<table border=0 width=90%% cellpadding=0 cellspacing=6>")
-	len += format(plist[len], charsmax(plist) - len, "<tr style='color:green;font-weight:bold;text-decoration:underline;'><td>PLAYER<td><td>LOCATION")
+	len += format(plist[len], charsmax(plist) - len, "<tr style='color:#00b300;font-weight:bold;text-decoration:underline;'><td>PLAYER<td>CAMERA<td>LOCATION")
 
 	for(new i = 1; i <= g_maxplayers; i++) {
 		if(~IsUserConnected(i) || IsUserBot(i))
@@ -4501,9 +4487,9 @@ public WhoIs(id){
 		len += format(plist[len], charsmax(plist) - len, "<tr><td>")
 		if(g_userCountry_2[i][0] != EOS){
 			//len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
-			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_userClanName[i], g_userCountry[i], g_userCity[i])
+			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>3rd":"<font color=yellow>1st", g_userCountry[i], g_userCity[i])
 		} else {
-			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_userClanName[i], "N/A")
+			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>3rd":"<font color=yellow>1st", "N/A")
 		}
 	}
 
@@ -4563,16 +4549,18 @@ public client_disconnect(id){
 		ColorChat(i, RED, "^3<- ^1%s ^3has left", name)
 	}
 
-	save_stats(id)
+	//save_stats(id)
 
 	g_bValid[id] = false
-	
+	/*	
 	g_Experience[id] = 0
 	GoalyPoints[id] = 0
 	
+
 	new x
 	for(x = 1; x<=RECORDS; x++)
 		MadeRecord[id][x] = 0
+	*/
 }
 
 play_wav(id, wav[]){
@@ -4613,16 +4601,8 @@ public SvRestart(){
 
 cmdSpectate(id){
 	if((T <= get_user_team(id) <= CT) && get_pdata_int(id, OFFSET_INTERNALMODEL, 5) != 0xFF){
+		user_kill(id)
 		cs_set_user_team(id, CS_TEAM_SPECTATOR, CS_DONTCHANGE)
-		if(g_GK[T] == id){
-			g_GK[T] = 0
-		}
-		if(g_GK[CT] == id){
-			g_GK[CT] = 0
-		}
-		if(is_user_alive(id)){
-			user_kill(id)
-		}
 	}
 }
 
@@ -4675,9 +4655,13 @@ public CsSetUserScore(id, frags, deaths) {
 */
 
 public AdminMenu(id, level, cid){
+/*
+	if(get_user_flags(id) != ADMIN_IMMUNITY)
+		return PLUGIN_HANDLED
+*/
 	if(!cmd_access(id, level, cid, 0))
 		return PLUGIN_HANDLED
-
+		
 	new sz_temp[256]
 	format(sz_temp, charsmax(sz_temp), "\y[SJ] \w- %L", id, "SJ_ADMINMENU")
 	new menu = menu_create(sz_temp, "AdminMenu_handler")
@@ -5566,11 +5550,11 @@ public load_stats(id){
 	new szKey[128], x
 
 	format(szKey, charsmax(szKey), "%s_MATCH_ID", g_authid[id])
-	if(!TrieKeyExists(gTrieStats, szKey)){
+/*	if(!TrieKeyExists(gTrieStats, szKey)){
 		loadDefaultSkills(id)
 		return PLUGIN_HANDLED
 	}
-
+*/
 	for(x = 1; x <= RECORDS; x++){
 		format(szKey, charsmax(szKey), "%s_RECORDS@%s", g_authid[id], RecordTitles[x])
 		TrieGetCell(gTrieStats, szKey, MadeRecord[id][x])
@@ -5584,7 +5568,7 @@ public load_stats(id){
 
 	format(szKey, charsmax(szKey), "%s_CREDITS", g_authid[id])
 	TrieGetCell(gTrieStats, szKey, g_Credits[id])
-
+/*
 	for(x = 1; x <= UPGRADES; x++){
 		format(szKey, charsmax(szKey), "%s_SKILLS@%s", g_authid[id], UpgradeTitles[x])
 		if(!TrieGetCell(gTrieStats, szKey, PlayerUpgrades[id][x])){
@@ -5592,7 +5576,7 @@ public load_stats(id){
 			break
 		}
 	}
-
+*/
 	if(IsUserAlive(id)){
 		set_speedchange(id)
 	}
@@ -5627,7 +5611,7 @@ public saveDefaultSkills(id){
 	ColorChat(id, RED, "^4[SJ] ^1- Default skills have been saved.")
 	return PLUGIN_HANDLED
 }
-
+/*
 public loadDefaultSkills(id){
 	//ResetSkills(id)
 
@@ -5646,7 +5630,7 @@ public loadDefaultSkills(id){
 		set_speedchange(id)
 	}
 }
-
+*/
 /*
 +-----------------------+--------------------------------------------------------------------------+
 |			| ************************************************************************ |
@@ -6344,6 +6328,7 @@ public event_round_start(){
 	}
 }
 
+
 public event_round_end(){
 	g_iAFKCheck = 0
 }
@@ -6360,6 +6345,7 @@ public cmd_joinclass(id){
 	g_iWarn[id] = 0
 	g_iAFKTime[id]++
 }
+
 
 public cmd_say(id){
 	new szMsg[64], szCommand[16], szTrash[2]
