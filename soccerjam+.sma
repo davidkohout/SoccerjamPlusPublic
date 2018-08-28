@@ -971,7 +971,7 @@ public plugin_init(){
 	cv_regen	=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
 	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
-	cv_description		=	register_cvar("sj_description", "1")
+	cv_description		=	register_cvar("sj_description", "0")
 	
 	
 	register_touch("PwnBall", "player", 		"touch_Player")
@@ -6490,10 +6490,10 @@ public cvar_result(id, const cvar[], const value[])
     if(!fValue) 
         return
     client_cmd(id, "developer 0;fps_override 0") 
-    ColorChat(id, RED, "^4[SJ] ^1- ^3DEVELOPER 1 ^1is forbidden.") 
+    ColorChat(id, RED, "^4[SJ] ^1- ^3developer ^1is forbidden.") 
      
     if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
-		server_cmd("kick #%d Developer 1 isn't allowed on this server", get_user_userid(id)) 
+		server_cmd("kick #%d Developer isn't allowed on this server", get_user_userid(id)) 
 	
 		new sz_name[32]
 		new sz_team = get_user_team(id)
@@ -6528,9 +6528,9 @@ public cvar_result2(id, const cvar[], const value[])
     if(!fValue) 
         return 
     client_cmd(id, "fps_override 0") 
-    ColorChat(id, RED, "^4[SJ] ^1- ^3FPS_OVERRIDE 1 ^1is forbidden.") 
+    ColorChat(id, RED, "^4[SJ] ^1- ^3fps_override ^1is forbidden.") 
     if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
-		server_cmd("kick #%d fps_override 1 isn't allowed on this server", get_user_userid(id)) 
+		server_cmd("kick #%d fps_override isn't allowed on this server", get_user_userid(id)) 
 		
 		new sz_name[32]
 		new sz_team = get_user_team(id)
