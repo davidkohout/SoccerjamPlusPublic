@@ -366,6 +366,10 @@ static const RecordTitles[RECORDS + 1][] = {
 	"BLS", "PAS", "BKL", "HITS", "BHITS", "DIS", "DISED", "FGL"
 }
 
+static const RecordTitlesLong[8][] = {
+	"NULL", "GOALS", "ASSISTS", "STEALS", "GOALSAVES", "PASSES", "BALL LOSSES", "HUNTS"
+}
+
 #define UPGRADES 5
 enum {
 	STA = 1,	// stamina
@@ -416,6 +420,8 @@ new bool:g_bValid[MAX_PLAYERS+1]
 
 new gTimerEnt
 new Float:gTimerEntThink
+new Float:gTimerEntThink2
+
 new PressedAction[MAX_PLAYERS + 1]
 new seconds[MAX_PLAYERS + 1]
 new g_sprint[MAX_PLAYERS + 1]
@@ -504,7 +510,7 @@ new g_authid[MAX_PLAYERS + 1][36]
 
 new cv_nogoal, cv_alienzone, cv_alienthink, cv_kick, cv_turbo, cv_reset, cv_resptime, cv_smack,
 cv_ljdelay, cv_huntdist, cv_score[3], cv_multiball, cv_lamedist, cv_donate, cv_alienmin, cv_alienmax,
-cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper, cv_description
+cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper, cv_description, cv_timer
 
 
 new g_cam[MAX_PLAYERS + 1]
@@ -578,6 +584,8 @@ new Trie:gTrieStats
 
 new aball
 new is_kickball
+
+new msg_roundtime
 
 /*
 +-----------------------+--------------------------------------------------------------------------+
@@ -891,6 +899,8 @@ public plugin_init(){
 		CreateWall3()
 	}
 	
+	msg_roundtime 	= get_user_msgid("RoundTime")
+	
 	register_logevent("event_round_end", 2, "0=World triggered", "1=Round_End")
 	register_logevent("event_round_start", 2, "0=World triggered", "1=Round_Start")
 
@@ -950,28 +960,29 @@ public plugin_init(){
 	cv_score[0] 	= 	register_cvar("sj_score", 	"ScoreLim[31]")
 	cv_score[T] 	= 	register_cvar("sj_scoret", 	"0")
 	cv_score[CT] 	= 	register_cvar("sj_scorect", 	"0")
-	cv_reset 	= 	register_cvar("sj_idleball",	"30.0")
+	cv_reset 		= 	register_cvar("sj_idleball",	"30.0")
 	cv_alienzone 	= 	register_cvar("sj_alienzone",	"650")
 	cv_alienthink	=	register_cvar("sj_alienthink",	"1.0")
-	cv_alienmin	=	register_cvar("sj_alienmin",	"10.0")
-	cv_alienmax	=	register_cvar("sj_alienmax",	"12.0")
-	cv_kick 	= 	register_cvar("sj_kick",	"650")
-	cv_turbo 	= 	register_cvar("sj_turbo", 	"2")
+	cv_alienmin		=	register_cvar("sj_alienmin",	"10.0")
+	cv_alienmax		=	register_cvar("sj_alienmax",	"12.0")
+	cv_kick 		= 	register_cvar("sj_kick",	"650")
+	cv_turbo 		= 	register_cvar("sj_turbo", 	"2")
 	cv_resptime 	=	register_cvar("sj_resptime", 	"2.0")
-	cv_nogoal 	=	register_cvar("sj_nogoal", 	"0")
-	cv_smack	=	register_cvar("sj_smack", 	"80")
-	cv_ljdelay	=	register_cvar("sj_ljdelay", 	"5.0")
+	cv_nogoal 		=	register_cvar("sj_nogoal", 	"0")
+	cv_smack		=	register_cvar("sj_smack", 	"80")
+	cv_ljdelay		=	register_cvar("sj_ljdelay", 	"5.0")
 	cv_multiball	=	register_cvar("sj_multiball", 	"15")
-	cv_donate 	= 	register_cvar("sj_donate", 	"1")
-	cv_chat 	=	register_cvar("sj_chat", 	"1")
-	cv_time 	= 	register_cvar("sj_time", 	"30")
-	cv_balldist	= 	register_cvar("sj_balldist", 	"1400")
-	cv_players 	= 	register_cvar("sj_players", 	"16")
-	cv_pause	= 	register_cvar("sj_pause", 	"0")
-	cv_regen	=	register_cvar("sj_regen",	"0")
+	cv_donate 		= 	register_cvar("sj_donate", 	"1")
+	cv_chat 		=	register_cvar("sj_chat", 	"1")
+	cv_time 		= 	register_cvar("sj_time", 	"1")
+	cv_balldist		= 	register_cvar("sj_balldist", 	"1400")
+	cv_players 		= 	register_cvar("sj_players", 	"16")
+	cv_pause		= 	register_cvar("sj_pause", 	"0")
+	cv_regen		=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
 	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
 	cv_description		=	register_cvar("sj_description", "0")
+	cv_timer		=	register_cvar("sj_timer",	"1")
 	
 	
 	register_touch("PwnBall", "player", 		"touch_Player")
@@ -1047,6 +1058,7 @@ public plugin_init(){
 		if(GAME_TYPE == TYPE_PUBLIC){
 			if(!winner){
 				gTimerEntThink = 0.2
+				gTimerEntThink2 = 1.01
 			} else {
 				gTimerEntThink = 0.5
 			}
@@ -1766,31 +1778,61 @@ public StatusDisplay(szEntity){
 			if(GAME_TYPE == TYPE_PUBLIC){
 				new sz_score = get_pcvar_num(cv_score[0])
 				//new sz_score = ScoreLim[31]
+				if(!winner){
+					if(g_Timeleft > 118){
+						g_Timeleft = 60
+					}
+					new timedisplay[32]
+					new seconds = 0
+					new minutes = 0
+					//format(timedisplay, charsmax(timedisplay), ":%s%i", seconds<10?"0":"", seconds)
+					format(timedisplay, charsmax(timedisplay), "%s:%s%i", minutes, seconds<10?"0":"", seconds)
+					for(id = 1; id <= g_maxplayers; id++) {
+						if(~IsUserConnected(id)){
+							continue
+						}		
+						message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
+						//write_short(abs(g_Timeleft) + 1)
+						write_short(0)
+						message_end()
+					}
+					if(++g_Timeleft == 0)
+						g_Timeleft = 119							
+				}
+				else
+				{
+					g_Timeleft = 0
+				}
+						
 				for(id = 1; id <= g_maxplayers; id++){
 					if(~IsUserConnected(id) || IsUserBot(id) || g_showhelp[id])
 						continue
 
-					set_dhudmessage(255, 20, 20, 0.44, 0.05, 0, 0.2, 0.2, 0.2, 0.2)
+					set_dhudmessage(255, 20, 20, 0.44, 0.05, 0, 1.1, 1.1, 1.1, 1.1)
 					show_dhudmessage(id, "%s - %d", TeamNames[T], get_pcvar_num(cv_score[1]))
 
-					set_dhudmessage(20, 20, 255, 0.52, 0.05, 0, 0.2, 0.2, 0.2, 0.2)
+					set_dhudmessage(20, 20, 255, 0.52, 0.05, 0, 1.1, 1.1, 1.1, 1.1)
 					show_dhudmessage(id, "%d - %s", get_pcvar_num(cv_score[2]), TeamNames[CT])
 
 					if(!winner){
 						format(sz_temp, charsmax(sz_temp), " %L ", id,
 						(sz_score%10 == 1 && sz_score%100 != 11)?
 						"SJ_GOALLIM1":"SJ_GOALLIM", sz_score)
-						set_hudmessage(20, 175, 20, 1.0, 0.0, 0, 0.2, 0.2, 0.2, 0.2, 1)
+						set_hudmessage(20, 175, 20, 1.0, 0.0, 0, 1.1, 1.1, 1.1, 1.1, 1)
 						show_hudmessage(id, "%s^n^n^n^n^n^n%s", sz_temp, g_temp)
 					}
 				}
 			}
 		}
-
 	}
 	//client_print(0, print_chat, "%d : %0.f", szEntity, pev(szEntity, pev_nextthink))
+	if(!winner){
+		set_pev(szEntity, pev_nextthink, halflife_time() + gTimerEntThink2)
+	}
+	else
+	{
 	set_pev(szEntity, pev_nextthink, halflife_time() + gTimerEntThink)
-
+	}
 	return PLUGIN_HANDLED
 }
 
@@ -3594,6 +3636,7 @@ public BuyUpgrade(id){
 	//menu_addblank(menu_upgrade[id], (UPGRADES+1))
 	menu_additem(menu_upgrade[id],"\yTop Stats")
 	menu_additem(menu_upgrade[id],"\yReset")
+	menu_additem(menu_upgrade[id],"\yPlayers Info")
 	menu_setprop(menu_upgrade[id], MPROP_EXIT, MEXIT_NEVER)
 	menu_display(id, menu_upgrade[id], 0)
 
@@ -3607,6 +3650,11 @@ public Upgrade_Handler(id, menu, item){
 		return PLUGIN_HANDLED
 	}
 
+	if(item == 7){
+		WhoIs(id)
+		return PLUGIN_HANDLED
+		}
+	
 	if(item == 6){
 		ResetSkills(id)
 		return PLUGIN_HANDLED
@@ -4062,7 +4110,6 @@ public think_Alien(mascot){
 		set_pev(mascot, pev_nextthink, halflife_time() + get_pcvar_float(cv_alienthink))
 		return PLUGIN_HANDLED
 	}
-
 	new team = pev(mascot, pev_team)
 	new distance = get_pcvar_num(cv_alienzone)
 	new indist[32], inNum, i
@@ -4074,7 +4121,9 @@ public think_Alien(mascot){
 		if(IsUserAlive(id)){
 			sz_team = get_user_team(id)
 			sz_dist = get_entity_distance(id, mascot)
-
+			if(GAME_TYPE == TYPE_PUBLIC && get_pcvar_num(cv_timer)){
+				AlienTimer(id)
+			}
 			if(sz_dist < distance){
 				if(sz_team != team ){
 					for(i = 0; i <= g_count_balls; i++){
@@ -4119,7 +4168,11 @@ public think_Alien(mascot){
 
 // Goaly Points System
 goaly_checker(id){
-			
+	/*
+	message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
+	write_short(abs(g_Timeleft) + 1)
+	message_end()
+	*/
 	new hp = get_user_health(id)
 	new diff = BASE_HP + (PlayerUpgrades[id][STA] * AMOUNT_STA) - hp
 	if(hp <= BASE_HP + (PlayerUpgrades[id][STA] * AMOUNT_STA)) {
@@ -4130,6 +4183,15 @@ goaly_checker(id){
 		}
 	}
 }
+
+AlienTimer(id){
+
+	message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
+	write_short(abs(g_Timeleft) + 1)
+	message_end()
+	
+}
+
 
 public pfn_keyvalue(entid){
 	if(!RunOnce){
@@ -4327,17 +4389,17 @@ public FwdImpulse_201( const id ) {
 
 public client_connect(id){
 	set_user_info(id, "_vgui_menus", "0")
-	/*
+
 	g_bSpec[id] = false
 	g_bSpecAccess[id] = false
 	g_vOrigin[id] = {0, 0, 0}
 	g_iAFKTime[id] = 0
 	g_iWarn[id] = 0
-	*/
 }
 
 public client_putinserver(id){
 	cs_set_user_team(id, CS_TEAM_SPECTATOR) //prevent spec-doublechat bug
+	g_iCount[id] = 0 
 	ClearUserAlive(id)
 	SetUserConnected(id)
 	if(is_user_bot(id) || is_user_hltv(id) || !id){
@@ -4351,14 +4413,13 @@ public client_putinserver(id){
 	PressedAction[id] = 0
 	//g_showhelp[id] = false
 
-	/*
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
 		TempRecord[id][i] = 0
+		g_Experience[i] = 0
 		if(TopPlayer[0][i] == id)
 			TopPlayer[0][i] = 0
 	}
-	*/
 	
 	for(new i = 1; i <= UPGRADES; i++){
 		//PlayerUpgrades[id][i] = PlayerDefaultUpgrades[id][i]
@@ -4437,11 +4498,10 @@ public client_putinserver(id){
 	client_cmd(id, "cl_backspeed 1000")
 	client_cmd(id, "cl_sidespeed 1000")
 
-	//g_bValid[id] = bool:!is_user_hltv(id)
-	//load_stats(id)
+	g_bValid[id] = bool:!is_user_hltv(id)
+	load_stats(id)
 	//new x
 	set_task(0.1, "WhoIs", id)
-	g_iCount[id] = 0 
 	return PLUGIN_HANDLED
 }
 
@@ -4549,10 +4609,10 @@ public client_disconnect(id){
 		ColorChat(i, RED, "^3<- ^1%s ^3has left", name)
 	}
 
-	//save_stats(id)
+	save_stats(id)
 
 	g_bValid[id] = false
-	/*	
+
 	g_Experience[id] = 0
 	GoalyPoints[id] = 0
 	
@@ -4560,7 +4620,7 @@ public client_disconnect(id){
 	new x
 	for(x = 1; x<=RECORDS; x++)
 		MadeRecord[id][x] = 0
-	*/
+
 }
 
 play_wav(id, wav[]){
