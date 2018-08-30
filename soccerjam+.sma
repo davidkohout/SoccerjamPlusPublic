@@ -47,11 +47,11 @@
 * 		     		      (32 balls is the limit to prevent server crashes);
 * 		- sj_lamedist (90) - max distance to the opposite goals as far you can score,
 * 		    		    if there is no opponents in alien zone in moment of shoot;
-*		- sj_antideveloper (0) - enables antideveloper, warns & kicks player if his fps_override or developer is set to 1.
+*		- sj_antideveloper (1) - enables antideveloper, warns & kicks player if his fps_override or developer is set to 1.
 *		- sj_regen (0) - enables global HP regeneration
 *		- sj_blockspray (0) - blocks impulse 201 (spray logo)
-* 		- sj_alienmin (10.0) - minimal damage done by alien;
-* 		- sj_alienmax (12.0) - maximum damage done by alien;	
+* 		- sj_alienmin (9.0) - minimal damage done by alien;
+* 		- sj_alienmax (11.0) - maximum damage done by alien;	
 *		- sj_mapchooser (1) - enables SJ mapchooser - example syntax in sj_plus_maps.ini. Use this one since majority of different mapchoosers don't work right with SJ mods.
 *		- sj_afk_enable (1) - if you wish to use an AFK kicker, please use this one as it is fully working, many around alliedmodders are outdated and buggy.
 *			- sj_afk_transfer_time (12) - 12*5 (=60) seconds to transfer AFK player spec
@@ -62,12 +62,13 @@
 *		- sj_scorect - current Counter-Terrorists score;
 * 		- sj_idleball (30.0) - idle ball time in seconds;		
 *		- sj_description (0) - shows score in game description
+*		- sj_timer (1) - activates alien timer
 *
 * -------------------------------------------------------------------------------------------------- *
 *
 * - Change log:
 *
-* - - version 2.1.0) (pub modification):
+* - - version 2.1.1) (pub modification):
 *
 *	Various bugs fixed
 *	Implemented no fall damage (training mode);
@@ -81,10 +82,10 @@
 *	Added reseting skills option;
 *	Rewritten Help;
 *	Added integrated team management (AFK Manager + Instant Auto-Team Balance);
-*	Code optimalization for public mode /excluded whole SQL, FTP, HLTV (and more..) parts;
+*	Code optimalization for public mode /excluded SQL, FTP, HLTV (and more..) parts;
 *	Added constant HP regeneration (sj_regen 1);
 *	Added blocking spray feature (sj_blockspray).
-*
+*	Added Alien Timer (sj_alientimer)
 *
 *
 * - - version 1.0.0 (release):
@@ -147,17 +148,12 @@
 * 		- sj_nogoal (0) - goals:
 * 			0 - enable;
 * 			1 - disable.
-* 		- sj_smack (1.0) - smack chance multiplier;
+* 		- sj_smack (0.8) - smack chance multiplier;
 * 		- sj_ljdelay (5.0) - delay in seconds between doing long jumps;
-* 		- sj_donate (1) - setting for /$ chat command (public mode only):
-* 			0 - no one can donate or give money;
-* 			1 - everyone can only donate money;
-* 			2 - player can donate and admins can give money;
-* 			3 - everyone can give money.
 * 		- sj_alienzone (650.0) - radius of alien strikes;
 * 		- sj_alienthink (1.0) - period of time in seconds of alien strikes;
-* 		- sj_alienmin (10.0) - minimal damage done by alien;
-* 		- sj_alienmax (12.0) - maximum damage done by alien;
+* 		- sj_alienmin (9.0) - minimal damage done by alien;
+* 		- sj_alienmax (11.0) - maximum damage done by alien;
 *		- sj_score - winning score (public mode only);
 *		- sj_scoret - current Terrorists score;
 *		- sj_scorect - current Counter-Terrorists score;
@@ -186,8 +182,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.1.0"
-#define LASTCHANGE 	"2018-08-26"
+#define VERSION 	"2.1.1"
+#define LASTCHANGE 	"2018-08-30"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -342,12 +338,12 @@ enum {
 	ASSIST,
 	STEAL,
 	GOALSAVE,
+	PASS,
+	LOSS,
 	SMACK,
 	HUNT,
 	DEATH,
 	POSSESSION,
-	LOSS,
-	PASS,
 	BALLKILL,
 	HITS,
 	BHITS,
@@ -362,12 +358,14 @@ enum {
 }
 
 static const RecordTitles[RECORDS + 1][] = {
-	"NULL", "GOL", "AST", "STL", "GSV", "SMK", "HNT", "DTH", "POS",
-	"BLS", "PAS", "BKL", "HITS", "BHITS", "DIS", "DISED", "FGL"
+	"NULL", "GOL", "AST", "STL", "GSV", "PAS", "BLS", "SMK", "HNT", "DTH", "POS", 
+	"BKL", "HITS", "BHITS", "DIS", "DISED", "FGL"
 }
 
-static const RecordTitlesLong[8][] = {
-	"NULL", "GOALS", "ASSISTS", "STEALS", "GOALSAVES", "PASSES", "BALL LOSSES", "HUNTS"
+static const RecordTitlesLong[RECORDS + 1][] = {
+	"NULL", "Goals", "Assists", "Steals", "Goalsaves", "Passes", "Ball losses",
+	"Smacks", "Hunts", "Deaths", "Possession", "Ballkills", "Hits", "Ballholder Hits",
+	"Disarms", "Disarmed", "Furthest goal"
 }
 
 #define UPGRADES 5
@@ -509,7 +507,7 @@ new Float:BallSpinDirection[LIMIT_BALLS][3]
 new g_authid[MAX_PLAYERS + 1][36]
 
 new cv_nogoal, cv_alienzone, cv_alienthink, cv_kick, cv_turbo, cv_reset, cv_resptime, cv_smack,
-cv_ljdelay, cv_huntdist, cv_score[3], cv_multiball, cv_lamedist, cv_donate, cv_alienmin, cv_alienmax,
+cv_ljdelay, cv_huntdist, cv_score[3], cv_multiball, cv_lamedist, cv_alienmin, cv_alienmax,
 cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv_antideveloper, cv_description, cv_timer
 
 
@@ -963,8 +961,8 @@ public plugin_init(){
 	cv_reset 		= 	register_cvar("sj_idleball",	"30.0")
 	cv_alienzone 	= 	register_cvar("sj_alienzone",	"650")
 	cv_alienthink	=	register_cvar("sj_alienthink",	"1.0")
-	cv_alienmin		=	register_cvar("sj_alienmin",	"10.0")
-	cv_alienmax		=	register_cvar("sj_alienmax",	"12.0")
+	cv_alienmin		=	register_cvar("sj_alienmin",	"9.0")
+	cv_alienmax		=	register_cvar("sj_alienmax",	"11.0")
 	cv_kick 		= 	register_cvar("sj_kick",	"650")
 	cv_turbo 		= 	register_cvar("sj_turbo", 	"2")
 	cv_resptime 	=	register_cvar("sj_resptime", 	"2.0")
@@ -972,7 +970,6 @@ public plugin_init(){
 	cv_smack		=	register_cvar("sj_smack", 	"80")
 	cv_ljdelay		=	register_cvar("sj_ljdelay", 	"5.0")
 	cv_multiball	=	register_cvar("sj_multiball", 	"15")
-	cv_donate 		= 	register_cvar("sj_donate", 	"1")
 	cv_chat 		=	register_cvar("sj_chat", 	"1")
 	cv_time 		= 	register_cvar("sj_time", 	"1")
 	cv_balldist		= 	register_cvar("sj_balldist", 	"1400")
@@ -980,7 +977,7 @@ public plugin_init(){
 	cv_pause		= 	register_cvar("sj_pause", 	"0")
 	cv_regen		=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
-	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
+	cv_antideveloper	=	register_cvar("sj_antideveloper", "1")
 	cv_description		=	register_cvar("sj_description", "0")
 	cv_timer		=	register_cvar("sj_timer",	"1")
 	
@@ -2194,7 +2191,7 @@ public touch_Goalnet(ball, goalpost){
 						break
 					if(~IsUserConnected(g_assisters[t]))
 						continue
-					if(get_gametime() - g_assisttime[t] > 15.0){
+					if(get_gametime() - g_assisttime[t] > 20.0){
 						continue
 					}
 					sz_assist_num++
@@ -3203,39 +3200,6 @@ public ChatCommands(id){
 
 		if(!get_pcvar_num(cv_chat))
 			return PLUGIN_HANDLED_MAIN
-	} else if(GAME_TYPE == TYPE_PUBLIC && (equal(sz_cmd, "/$") || equal(sz_cmd, ".$") || equal(sz_cmd, "$"))){
-		new sz_cvar = get_pcvar_num(cv_donate)
-		if(sz_cvar == 0){
-			ColorChat(id, GREEN, "[SJ] ^1- ^3%L", id, "SJ_DONDIS")
-			return PLUGIN_CONTINUE
-		}
-
-		new sz_exp[16], sz_buff[16], sz_name[32]
-
-		parse(said, sz_buff, 15, sz_name, 31, sz_exp, 15)
-
-		if(strlen(said) < strlen(sz_cmd) + 2 || sz_exp[0] == EOS){
-			ColorChat(id, GREEN, "[SJ] ^1- %L", id, "SJ_DONUSAGE")
-			return PLUGIN_CONTINUE
-		}
-
-		new x = str_to_num(sz_exp)
-		if(x < 1){
-			ColorChat(id, GREEN, "[SJ] ^1- %L", id, "SJ_DONINVAM")
-			return PLUGIN_CONTINUE
-		}
-		if(equal(info, "*")){
-			GiveXP(id, 0, x)
-		} else {
-			new player = cmd_target(id, info, 2 | 8)
-			if(player){
-				GiveXP(id, player, x)
-			} else {
-				ColorChat(id, RED, "^4[SJ] ^1- ^3%L", id, "SJ_INVPLAYER")
-			}
-		}
-		if(!get_pcvar_num(cv_chat))
-			return PLUGIN_HANDLED_MAIN
 	}
 	if(!get_pcvar_num(cv_chat)){
 		client_print(id, print_center, "- Global chat is blocked -")
@@ -3454,37 +3418,6 @@ public ChatCommands_team(id){
 		}
 	} else if(equal(sz_cmd, "/helpmenu") || equal(sz_cmd, ".helpmenu")){
 		ShowHelp(id, x)
-	} else if(GAME_TYPE == TYPE_PUBLIC && (equal(sz_cmd, "/$") || equal(sz_cmd, ".$") || equal(sz_cmd, "$"))){
-		new sz_cvar = get_pcvar_num(cv_donate)
-		if(sz_cvar == 0){
-			ColorChat(id, GREEN, "[SJ] ^1- ^3%L", id, "SJ_DONDIS")
-			return PLUGIN_CONTINUE
-		}
-
-		new sz_exp[16], sz_buff[16], sz_name[32]
-
-		parse(said, sz_buff, 15, sz_name, 31, sz_exp, 15)
-
-		if(strlen(said) < strlen(sz_cmd) + 2 || sz_exp[0] == EOS){
-			ColorChat(id, GREEN, "[SJ] ^1- %L", id, "SJ_DONUSAGE")
-			return PLUGIN_CONTINUE
-		}
-
-		new x = str_to_num(sz_exp)
-		if(x < 1){
-			ColorChat(id, GREEN, "[SJ] ^1- %L", id, "SJ_DONINVAM")
-			return PLUGIN_CONTINUE
-		}
-		if(equal(info, "*")){
-			GiveXP(id, 0, x)
-		} else {
-			new player = cmd_target(id, info, 2 | 8)
-			if(player){
-				GiveXP(id, player, x)
-			} else {
-				ColorChat(id, RED, "^4[SJ] ^1- ^3%L", id, "SJ_INVPLAYER")
-			}
-		}
 	}
 
 	new sz_len = strlen(said)
@@ -3526,52 +3459,6 @@ public ResetSkills(id){
 	BuyUpgrade(id)
 }
 
-stock GiveXP(id, player, xp){
-	new sz_aname[32], sz_bname[32]
-	get_user_name(id, sz_aname, 31)
-	get_user_name(player, sz_bname, 31)
-	new sz_cvar = get_pcvar_num(cv_donate)
-	if(sz_cvar == 1 || (sz_cvar == 2 && !is_user_admin(id))){
-		if(id == player){
-			ColorChat(id, GREEN, "[SJ] ^1- %L", id, "SJ_DONOWN")
-			return
-		} else if(g_Experience[id] >= xp) {
-			g_Experience[player] += xp
-			g_Experience[id] -= xp
-			ColorChat(id, GREEN, "[SJ] ^1- %s %L %s",
-			sz_aname, id, "SJ_DONDONE", xp, sz_bname)
-		} else {
-			ColorChat(id, GREEN, "[SJ] ^1- %L", xp, id, "SJ_DONCANT")
-			return
-		}
-	} else {
-		if(player > 0){
-			g_Experience[player] += xp
-			if(g_Experience[player] > 99999){
-				g_Experience[player] = 99999
-			}
-			cs_set_user_money(id, g_Experience[player])
-		} else {
-			format(sz_bname, charsmax(sz_bname), "ALL")
-		}
-		for(new i = 1; i <= g_maxplayers; i++){
-			if(IsUserConnected(i)){
-				if(!player){
-					g_Experience[i] += xp
-					if(g_Experience[i] > 99999){
-						g_Experience[i] = 99999
-					}
-					cs_set_user_money(id, g_Experience[i])
-				}
-
-				ColorChat(i, GREEN, "[SJ] ^1- %s %L %s",
-				sz_aname, i, "SJ_DONGIVEN", xp, sz_bname)
-			}
-		}
-	}
-	return
-}
-
 public CameraChanger(id){
 	if(g_cam[id]){
 		set_view(id, CAMERA_NONE)
@@ -3592,7 +3479,7 @@ public CameraChanger(id){
 
 public BuyUpgrade(id){
 	if(!(T <= get_user_team(id) <= CT)){
-		//ShowUpgrade(id, id)
+		ShowMenuStatsSpec(id)
 		return PLUGIN_HANDLED
 	}
 	new sz_temp[64], num[2], mTitle[101], x, sz_lang[32]
@@ -3638,6 +3525,7 @@ public BuyUpgrade(id){
 	menu_additem(menu_upgrade[id],"\yReset")
 	menu_additem(menu_upgrade[id],"\yPlayers Info")
 	menu_setprop(menu_upgrade[id], MPROP_EXIT, MEXIT_NEVER)
+	menu_setprop(menu_upgrade[id],MPROP_PERPAGE,0)
 	menu_display(id, menu_upgrade[id], 0)
 
 	return PLUGIN_HANDLED
@@ -4167,12 +4055,8 @@ public think_Alien(mascot){
 }
 
 // Goaly Points System
+
 goaly_checker(id){
-	/*
-	message_begin(MSG_ONE_UNRELIABLE, msg_roundtime, _, id)
-	write_short(abs(g_Timeleft) + 1)
-	message_end()
-	*/
 	new hp = get_user_health(id)
 	new diff = BASE_HP + (PlayerUpgrades[id][STA] * AMOUNT_STA) - hp
 	if(hp <= BASE_HP + (PlayerUpgrades[id][STA] * AMOUNT_STA)) {
@@ -4547,9 +4431,9 @@ public WhoIs(id){
 		len += format(plist[len], charsmax(plist) - len, "<tr><td>")
 		if(g_userCountry_2[i][0] != EOS){
 			//len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
-			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>3rd":"<font color=yellow>1st", g_userCountry[i], g_userCity[i])
+			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>- 3rd -":"<font color=yellow>- 1st -", g_userCountry[i], g_userCity[i])
 		} else {
-			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>3rd":"<font color=yellow>1st", "N/A")
+			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>- 3rd -":"<font color=yellow>- 1st -", "N/A")
 		}
 	}
 
@@ -4956,6 +4840,7 @@ public MultiBall(id, level, cid){
 +-----------------------+--------------------------------------------------------------------------+
 */
 
+/*
 public ShowMOTDPlayerStats(id, player){
 	new sz_temp[2048], sz_len, title[32], i, sz_name[32]
 	get_user_name(player, sz_name, 31)
@@ -5005,22 +4890,28 @@ public ShowMOTDPlayerStats(id, player){
 
 	show_motd(id, sz_temp, title)
 }
+*/
 
 public ShowMenuStats(id){
-	new sz_temp[1024], sz_len, sz_buff[32], sz_name[13]
+
+	if(!(T <= get_user_team(id) <= CT)){
+		ShowMenuStatsSpec(id)
+		return PLUGIN_HANDLED
+	}
+	new sz_temp[1024], sz_len, sz_buff[32], sz_name[32]
 	//sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "%L:^n", id, "SJ_STATSTITLE")
-	sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "Stats:^n")
+	sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "Top Stats^n")
 	for(new x = 1; x <= RECORDS; x++){
-		if(x == POSSESSION || x == DISTANCE || x == BALLKILL)
+		if(x == POSSESSION || x == DISTANCE || x == BALLKILL || x == SMACK || x == DEATH || x == HITS || x == BHITS || x == DISHITS || x == DISARMED || x == HUNT)
 			continue
 		//format(sz_lang, charsmax(sz_lang), "SJ_%s", RecordTitles[x])
-		format(sz_name, 15, TopPlayerName[x])
+		format(sz_name, 19, TopPlayerName[x])
 		if(TopPlayer[0][x] != id){
 			format(sz_buff, 8, "\d%d", MadeRecord[id][x])
 		} else {
 			format(sz_buff, 8, "")
 		}
-		sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "^n\w%s \y%s \r%d %s", RecordTitles[x],
+		sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "^n\w%s \y%s \r%d %s", RecordTitlesLong[x],
 		TopPlayer[1][x]?sz_name:"", TopPlayer[1][x], sz_buff)
 
 		//menu_additem(menu, x, sz_temp)
@@ -5034,6 +4925,36 @@ public ShowMenuStats(id){
 	return PLUGIN_HANDLED
 }
 
+public ShowMenuStatsSpec(id){
+	new sz_temp[1024], sz_len, sz_buff[32], sz_name[32]
+	//sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "%L:^n", id, "SJ_STATSTITLE")
+	sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "Top Stats^n")
+	for(new x = 1; x <= RECORDS; x++){
+		if(x == POSSESSION || x == DISTANCE || x == BALLKILL || x == SMACK || x == DEATH || x == HITS || x == BHITS || x == DISHITS || x == DISARMED || x == HUNT)
+			continue
+		//format(sz_lang, charsmax(sz_lang), "SJ_%s", RecordTitles[x])
+		format(sz_name, 19, TopPlayerName[x])
+		if(TopPlayer[0][x] != id){
+			format(sz_buff, 8, "\d%d", MadeRecord[id][x])
+		} else {
+			format(sz_buff, 8, "")
+		}
+		sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "^n\w%s \y%s \r%d", RecordTitlesLong[x],
+		TopPlayer[1][x]?sz_name:"", TopPlayer[1][x])
+
+		//menu_additem(menu, x, sz_temp)
+	}
+	//console_print(id, sz_temp)
+	new menu = menu_create(sz_temp, "Done_Handler")
+	menu_setprop(menu, MPROP_EXIT, MEXIT_NEVER)
+	menu_additem(menu, "Close")
+
+	menu_display(id, menu, 0)
+	return PLUGIN_HANDLED
+}
+
+/*
+
 public ShowMenuPlayerStats(id, player){
 	new sz_temp[1024], sz_len
 	new sz_name[32], sz_lang[32]
@@ -5043,9 +4964,9 @@ public ShowMenuPlayerStats(id, player){
 	//"\y%L:^n\w%s^n^n", id, "SJ_SKILLS", sz_name)
 	sz_len = format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "%s^n^n", sz_name)
 	for(new x = 1; x <= RECORDS; x++){
-		if(x == POSSESSION)
+		if(x == POSSESSION || x == DEATH || x == HITS || x == BHITS || x == DISHITS || x == DISARMED)
 			continue
-		format(sz_lang, charsmax(sz_lang), "SJ_%s", RecordTitles[x])
+		format(sz_lang, charsmax(sz_lang), "SJ_%s", RecordTitlesLong[x])
 		sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len,
 		"%L \r%d \w%d^n", id, sz_lang,
 		MadeRecord[player][x], TopPlayer[1][x])
@@ -5060,18 +4981,20 @@ public ShowMenuPlayerStats(id, player){
 	menu_display(id, menu, 0)
 	return PLUGIN_HANDLED
 }
+
+*/
 public TNT_ShowMenuPlayerStats(id, player){
 	new sz_temp[1024], sz_len
 	new sz_name[32]
 
 	get_user_name(player, sz_name, 31)
-	sz_len = format(sz_temp[sz_len], 1023 - sz_len, "\yStats:^n\w%s^n^n", sz_name)
+	sz_len = format(sz_temp[sz_len], 1023 - sz_len, "\yStats^n\w%s^n^n", sz_name)
 
 	for(new x = 1; x <= RECORDS; x++){
-		if(x == POSSESSION)
+		if(x == POSSESSION || x == DEATH || x == HITS || x == BHITS || x == DISHITS || x == DISARMED || x == SMACK || x == DISTANCE || x == BALLKILL)
 			continue
-		sz_len += format(sz_temp[sz_len], 1023 - sz_len,  "\w%s \r%d \d%d^n", RecordTitles[x],
-		MadeRecord[player][x], TopPlayer[1][x])
+		sz_len += format(sz_temp[sz_len], 1023 - sz_len,  "\w%s \r%d^n", RecordTitlesLong[x],
+		MadeRecord[player][x])
 	}
 	new menu = menu_create(sz_temp, "Done_Handler")
 
@@ -5223,7 +5146,7 @@ public Event_Record(id, recordtype){
 
 			new sz_name[32]
 			get_user_name(id, sz_name, charsmax(sz_name))
-			format(TopPlayerName[recordtype], 12, "%s", sz_name)
+			format(TopPlayerName[recordtype], 20, "%s", sz_name)
 		}
 
 		if(recordtype == POSSESSION){
