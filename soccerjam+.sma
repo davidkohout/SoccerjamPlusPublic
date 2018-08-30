@@ -3483,7 +3483,7 @@ public BuyUpgrade(id){
 		return PLUGIN_HANDLED
 	}
 	new sz_temp[64], num[2], mTitle[101], x, sz_lang[32]
-	format(mTitle, charsmax(mTitle), "\y%L:", id, "SJ_SKILLS")
+	format(mTitle, charsmax(mTitle), "\y%L", id, "SJ_SKILLS")
 	menu_upgrade[id] = menu_create(mTitle, "Upgrade_Handler")
 	for(x = 1; x <= UPGRADES; x++){
 		format(sz_lang, charsmax(sz_lang), "SJ_%s", UpgradeTitles[x])
@@ -3567,7 +3567,7 @@ public Upgrade_Handler(id, menu, item){
 				play_wav(id, snd_levelup)
 				
 			g_Experience[id] -= UpgradePrice[item][PlayerUpgrades[id][item]]
-			cs_set_user_money(id, g_Experience[id])
+			//cs_set_user_money(id, g_Experience[id])
 
 			switch(item){
 				case STA: {
@@ -3593,7 +3593,7 @@ public Upgrade_Handler(id, menu, item){
 public ShowUpgrade(id, player){
 	new sz_temp[32], sz_level[64], sz_name[32]
 	get_user_name(player, sz_name, 31)
-	format(sz_temp, charsmax(sz_temp), "%L:^n\w%s", id, "SJ_SKILLS", sz_name)
+	format(sz_temp, charsmax(sz_temp), "%L^n\w%s", id, "SJ_SKILLS", sz_name)
 
 	menu_upgrade[id] = menu_create(sz_temp, "Done_Handler")
 	new x, sz_color[2], num[1], sz_lang[32]
@@ -5180,7 +5180,7 @@ public Event_Record(id, recordtype){
 		}
 		if(g_Experience[id] < 0)
 			g_Experience[id] = 0
-		cs_set_user_money(id, g_Experience[id])
+		//cs_set_user_money(id, g_Experience[id])
 		CsSetUserScore(id, g_MVP_points[id], MadeRecord[id][DEATH])
 	}
 }
