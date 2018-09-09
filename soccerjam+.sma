@@ -162,7 +162,7 @@
 * 	Remade multi-language support;
 * 	Remade help.
 *											[Doondook]
-*
+
 * --------------------------------------------------------------------------------------------------
 */
 
@@ -352,6 +352,7 @@ enum {
 	DISTANCE
 }
 
+
 enum {
 	aTerro,
 	aCt
@@ -512,6 +513,7 @@ cv_time, cv_balldist, cv_players, cv_chat, cv_pause, cv_regen, cv_blockspray, cv
 
 
 new g_cam[MAX_PLAYERS + 1]
+new bool:g_cam2[MAX_PLAYERS + 1]
 
 new g_vault
 new g_current_match, gMatchId //, g_temp_current_match
@@ -584,7 +586,6 @@ new aball
 new is_kickball
 
 new msg_roundtime
-
 /*
 +-----------------------+--------------------------------------------------------------------------+
 |			| ************************************************************************ |
@@ -780,17 +781,17 @@ new bool:voting
 new votes[10]
 new maps[9][32]
 
-new num_nominated = 0
-new nominated[MAX_NOMINATED][32]
-new bool:has_nominated[33]
+//new num_nominated = 0
+//new nominated[MAX_NOMINATED][32]
+//new bool:has_nominated[33]
 
 new mp_winlimit
 new mp_maxrounds
 
 //new extended_pcvar
-new lastmap_pcvar
+//new lastmap_pcvar
 new lastmap_was_pcvar
-new lastlastmap_pcvar
+//new lastlastmap_pcvar
 new lastlastmap_was_pcvar
 new showvotes_pcvar
 new rtv_percent_pcvar
@@ -821,11 +822,13 @@ new say_commands[][32] =
 	"/rtv"
 }
 
+/*
 new say_commands2[][32] =
 {
 	"nominate",
 	"/nominate"
 }
+*/
 
 new lastmap[32]
 new lastlastmap[32]
@@ -864,8 +867,8 @@ public plugin_init(){
 		}
 
 		//extended_pcvar	=	register_cvar("sj_extendmax",	"10")
-		lastmap_pcvar	=	register_cvar("sj_lastmap_show",	"1")
-		lastlastmap_pcvar	=	register_cvar("map_lastlastmap_show",	"1")
+		//lastmap_pcvar	=	register_cvar("sj_lastmap_show",	"1")
+		//lastlastmap_pcvar	=	register_cvar("map_lastlastmap_show",	"1")
 		showvotes_pcvar		=	register_cvar("sj_show_votes",	"1")
 		rtv_percent_pcvar	=	register_cvar("sj_rtv_percent",	"60")
 		rtv_wait_pcvar		=	register_cvar("sj_rtv_wait",	"0")
@@ -917,6 +920,7 @@ public plugin_init(){
 	CVAR_afk_kick_players = register_cvar("sj_afk_kick_players", "10")
 	
 	set_cvar_num("sv_proxies", 1) // for HLTV part
+	set_cvar_num("sv_cheats", 1) // for Lagless cam
 	set_cvar_num("mp_friendlyfire", 0)
 
 	register_dictionary("sj_plus_hud.txt")
@@ -950,7 +954,12 @@ public plugin_init(){
 	RegisterHam(Ham_TakeDamage, 	"player", "PlayerDamage")
 	RegisterHam(Ham_Spawn, 		"player", "PlayerSpawned", 1)
 	RegisterHam(Ham_Killed, 	"player", "PlayerKilled")
+	
+	register_impulse( 101, "BlockCommand" )
+	register_impulse( 102, "BlockCommand" )
+	register_impulse( 202, "BlockCommand" )
 	register_impulse( 201, "FwdImpulse_201" );
+	
 
 	//cv_type		=	register_cvar("sj_type", 	"0")
 	cv_huntdist 	=	register_cvar("sj_huntdist", 	"0")
@@ -981,7 +990,6 @@ public plugin_init(){
 	cv_description		=	register_cvar("sj_description", "0")
 	cv_timer		=	register_cvar("sj_timer",	"1")
 	
-	
 	register_touch("PwnBall", "player", 		"touch_Player")
 	register_touch("PwnBall", "soccerjam_goalnet",	"touch_Goalnet")
 	register_touch("PwnBall", "worldspawn",		"touch_World")
@@ -996,10 +1004,11 @@ public plugin_init(){
 	set_task(0.4, "Meter", _, _, _, "b")
 	set_task(1.0, "Event_Radar", _, _, _, "b")
 	set_task(3.0, "taskDeveloperCheck", _, _, _, "b") 
-	set_task(3.1, "taskDeveloperCheck2", _, _, _, "b") 
+	//set_task(3.1, "taskDeveloperCheck2", _, _, _, "b") 
 
 	register_think("PwnBall", 	"think_Ball")
 	register_think("Mascot", 	"think_Alien")
+	
 
 	register_clcmd("say",		"ChatCommands")		// handle say
 	register_clcmd("say_team",	"ChatCommands_team")	// handle say_team
@@ -1008,6 +1017,9 @@ public plugin_init(){
 	register_clcmd("radio1", 	"CurveLeft")		// curve left
 	register_clcmd("radio2", 	"CurveRight")		// curve right
 	register_clcmd("fullupdate", 	"BlockCommand")		// block fullupdate
+	register_clcmd("noclip", 	"BlockCommand")
+	//register_clcmd("developer 1", 	"BlockCommand")
+	register_clcmd("god",	"BlockCommand")
 
 	register_concmd("showbriefing", "AdminMenu", 	ADMIN_IMMUNITY, 	"SJ Admin Menu")
 	register_concmd("nightvision", 	"CameraChanger",_,		"Switches camera view")
@@ -1018,13 +1030,13 @@ public plugin_init(){
 
 	register_menucmd(register_menuid("Team_Select",1), (1<<0)|(1<<1)|(1<<4)|(1<<5), "team_select")
 
-	CVAR_KILLNEARBALL = register_cvar("sj_kill_distance_ball", "150.0")
-	CVAR_KILLNEARHOLDER = register_cvar("sj_kill_distance_holder", "250.0")
+	CVAR_KILLNEARBALL = register_cvar("sj_kill_distance_ball", "200.0")
+	CVAR_KILLNEARHOLDER = register_cvar("sj_kill_distance_holder", "200.0")
 	
 	set_pcvar_num(cv_score[T], 0)
 	set_pcvar_num(cv_score[CT], 0)
 	set_pcvar_num(cv_score[0], ScoreLim[31])
-
+	
 	GAME_TYPE = TYPE_PUBLIC
 	if(GAME_TYPE == TYPE_PUBLIC){
 		GAME_MODE = MODE_NONE
@@ -1194,7 +1206,7 @@ public CreateBall(i){
 			
 			remove_task(i + 55555)
 
-			set_pev(entity, pev_nextthink, halflife_time() + 0.05)
+			set_pev(entity, pev_nextthink, halflife_time() + 0.01)
 			
 			entity_set_float(entity,EV_FL_framerate,0.0)
 			entity_set_int(entity,EV_INT_sequence,0)
@@ -1263,7 +1275,7 @@ public think_Ball(){
 			}
 
 		}
-		set_pev(g_ball[i], pev_nextthink, halflife_time() + 0.05)
+		set_pev(g_ball[i], pev_nextthink, halflife_time() + 0.01)
 	}
 
 	return PLUGIN_HANDLED
@@ -1328,7 +1340,7 @@ stock MoveBall(where, team = 0, i){
 						entity_set_origin(g_ball[i], orig)
 						remove_task(i + 55555)
 
-						set_task(get_pcvar_float(cv_reset), "ClearBall", 55555 + i)
+						set_task(20.0, "ClearBall", 55555 + i)
 						
 						PowerPlay[i] = 0
 					}
@@ -1662,7 +1674,7 @@ public StatusDisplay(szEntity){
 					continue
 
 				//query_client_cvar(id, "cl_filterstuffcmd", "SetUserConfig")
-
+				
 				sz_len = 0
 
 				sz_len += format(sz_temp[sz_len], charsmax(sz_temp) - sz_len, "Top Match Statistics^n^n")
@@ -1773,7 +1785,7 @@ public StatusDisplay(szEntity){
 				Event_Record(g_ballholder[0], POSSESSION)
 			}
 			if(GAME_TYPE == TYPE_PUBLIC){
-				new sz_score = get_pcvar_num(cv_score[0])
+				//new sz_score = get_pcvar_num(cv_score[0])
 				//new sz_score = ScoreLim[31]
 				if(!winner){
 					if(g_Timeleft > 118){
@@ -1810,7 +1822,7 @@ public StatusDisplay(szEntity){
 
 					set_dhudmessage(20, 20, 255, 0.52, 0.05, 0, 1.1, 1.1, 1.1, 1.1)
 					show_dhudmessage(id, "%d - %s", get_pcvar_num(cv_score[2]), TeamNames[CT])
-
+					/*
 					if(!winner){
 						format(sz_temp, charsmax(sz_temp), " %L ", id,
 						(sz_score%10 == 1 && sz_score%100 != 11)?
@@ -1818,6 +1830,7 @@ public StatusDisplay(szEntity){
 						set_hudmessage(20, 175, 20, 1.0, 0.0, 0, 1.1, 1.1, 1.1, 1.1, 1)
 						show_hudmessage(id, "%s^n^n^n^n^n^n%s", sz_temp, g_temp)
 					}
+					*/
 				}
 			}
 		}
@@ -2281,10 +2294,12 @@ public touch_Goalnet(ball, goalpost){
 					g_count_balls = 0
 				}
 				round_restart(5.0)
+				
 			} else if(g_count_scores == g_count_balls + 1) {
 				if(g_Timeleft > 12){
 					set_task(3.0, "SvRestart", -13110)
-					StatusDisplay_Restart()
+					set_task(4.5,"StatusDisplay_Restart")
+					//StatusDisplay_Restart()
 				}
 				g_count_scores = 0
 			}
@@ -2640,7 +2655,7 @@ public Event_StartRound(){
 			}
 
 			set_cvar_string("amx_nextmap", "-")
-			set_task(35.0, "ChangeMap", 9811)
+			set_task(60.0, "ChangeMap", 9811)
 			MultiBall(0 ,0, 0)
 		}
 	} else {
@@ -2768,7 +2783,6 @@ public PlayerKilled(victim, killer, shouldgib){
 			Event_Record(killer, HUNT)
 	}
 	g_iAFKTime[victim]++
-	return PLUGIN_HANDLED
 }
 
 public PlayerSpawned(id){
@@ -2777,7 +2791,7 @@ public PlayerSpawned(id){
 
 	remove_task(id + 412)
 	set_task(0.1, "PlayerSpawnedSettings", id)
-
+	
 	g_iAFKTime[id]++
 }
 
@@ -3109,6 +3123,10 @@ public ChatCommands(id){
 		return PLUGIN_HANDLED_MAIN
 	} else if(equal(sz_cmd, "/cam") || equal(sz_cmd, ".cam")){
 		CameraChanger(id)
+		if(!get_pcvar_num(cv_chat))
+			return PLUGIN_HANDLED_MAIN
+	} else if (equal(sz_cmd, "/cam2") || equal(sz_cmd, ".cam2")){
+		CameraChangerAdvanced(id)
 		if(!get_pcvar_num(cv_chat))
 			return PLUGIN_HANDLED_MAIN
 	} else if(equal(sz_cmd, "/whois") || equal(sz_cmd, ".whois")
@@ -3469,6 +3487,32 @@ public CameraChanger(id){
 	}
 }
 
+public CameraChangerAdvanced(id){	
+	query_client_cvar(id, "cam_snapto", "CameraChangerAdvancedHandler")
+}
+
+public CameraChangerAdvancedHandler(id, const cvar[], const value[]){
+
+    //new Float:fValue = str_to_float(value)	
+	
+    if(str_to_num(value) != 0){
+		client_cmd(id, "firstperson")
+		client_cmd(id, "cam_snapto 0")
+		g_cam2[id] = false
+	}
+	else
+	{
+		new ip[32]
+		get_user_ip(0, ip, charsmax(ip))
+		g_cam2[id] = true
+		client_cmd(id, "cam_command 1")
+		client_cmd(id, "cam_idealyaw 0")
+		client_cmd(id, "cam_snapto 1")
+		client_cmd(id, "thirdperson")
+		client_cmd(id, "wait;wait;wait;wait;wait;^"connect^" %s",ip)
+	}
+}
+
 /*
 +-----------------------+--------------------------------------------------------------------------+
 |			| ************************************************************************ |
@@ -3524,6 +3568,8 @@ public BuyUpgrade(id){
 	menu_additem(menu_upgrade[id],"\yTop Stats")
 	menu_additem(menu_upgrade[id],"\yReset")
 	menu_additem(menu_upgrade[id],"\yPlayers Info")
+	//menu_addblank(menu_upgrade[id])
+	menu_additem(menu_upgrade[id],"\yLagless 3rd Camera \d(requires reconnect)")
 	menu_setprop(menu_upgrade[id], MPROP_EXIT, MEXIT_NEVER)
 	menu_setprop(menu_upgrade[id],MPROP_PERPAGE,0)
 	menu_display(id, menu_upgrade[id], 0)
@@ -3538,6 +3584,11 @@ public Upgrade_Handler(id, menu, item){
 		return PLUGIN_HANDLED
 	}
 
+	if(item == 8){
+		CameraChangerAdvanced(id)
+		return PLUGIN_HANDLED
+		}
+	
 	if(item == 7){
 		WhoIs(id)
 		return PLUGIN_HANDLED
@@ -3760,12 +3811,15 @@ public Done_Handler(id, menu, item){
 public Meter(){
 	new id, target
 	new sprintText[256], sec
+	new sz_temp[1024]
 	new sz_len, x
 	new szTitle[32]
 	new ndir = -(DIRECTIONS)
 	new i
 	new Float:speedh
 	new Float:velocity[3]
+	new sz_score = get_pcvar_num(cv_score[0])
+	
 	for(id = 1; id <= g_maxplayers; id++){
 		sec = seconds[id]
 		if(~IsUserAlive(id))
@@ -3777,20 +3831,20 @@ public Meter(){
 		
 		if(i != g_count_balls + 1){
 			if(GAME_MODE != MODE_PREGAME ){
-			set_hudmessage(0, 255, 0, -1.0, 0.75, 0, 0.0, 0.6, 0.0, 0.0, 4)
-			sz_len = format(sprintText, charsmax(sprintText), " - CURVE - ^n[", id)
+				set_hudmessage(0, 255, 0, -1.0, 0.75, 0, 0.0, 0.6, 0.0, 0.0, 4)
+				sz_len = format(sprintText, charsmax(sprintText), " - CURVE - ^n[", id)
 
-			for(x = DIRECTIONS; x >= ndir; x--){
-				(x==0)?
-				(sz_len += format(sprintText[sz_len], charsmax(sprintText) - sz_len, "%s%s",
-				direction[i]==x?"0":"+", x==ndir?"]":"  ")):
-				(sz_len += format(sprintText[sz_len], charsmax(sprintText) - sz_len, "%s%s",
-				direction[i]==x?"0":"=", x==ndir?"]":"  "))
+				for(x = DIRECTIONS; x >= ndir; x--){
+					(x==0)?
+					(sz_len += format(sprintText[sz_len], charsmax(sprintText) - sz_len, "%s%s",
+					direction[i]==x?"0":"+", x==ndir?"]":"  ")):
+					(sz_len += format(sprintText[sz_len], charsmax(sprintText) - sz_len, "%s%s",
+					direction[i]==x?"0":"=", x==ndir?"]":"  "))
+				}
+
+				show_hudmessage(id, "%s", sprintText)
 			}
-
-			show_hudmessage(id, "%s", sprintText)
 		}
-	}
 		
 
 		target = pev(id, pev_iuser1) == 4 ? pev(id, pev_iuser2) : id
@@ -3838,6 +3892,14 @@ public Meter(){
 
 		seconds[id] = sec
 		show_hudmessage(id, "%s", sprintText)
+		
+		if(!winner){
+			format(sz_temp, charsmax(sz_temp), " %L ", id,
+			(sz_score%10 == 1 && sz_score%100 != 11)?
+			"SJ_GOALLIM1":"SJ_GOALLIM", sz_score)
+			set_hudmessage(20, 255, 20, 1.0, 0.0, 0, 1.0, 1.5, 0.1, 0.1, 1)
+			show_hudmessage(id, "%s^n^n^n^n^n^n%s", sz_temp, g_temp)
+		}
 	}
 }
 
@@ -4291,26 +4353,21 @@ public client_putinserver(id){
 		return PLUGIN_HANDLED
 	}
 
-	g_cam[id] = false
+	//g_cam[id] = false
 	seconds[id] = 0
 	g_sprint[id] = 0
 	PressedAction[id] = 0
+	g_Experience[id] = 0
 	//g_showhelp[id] = false
-
+	
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
 		TempRecord[id][i] = 0
-		g_Experience[i] = 0
 		if(TopPlayer[0][i] == id)
 			TopPlayer[0][i] = 0
 	}
-	
 	for(new i = 1; i <= UPGRADES; i++){
-		//PlayerUpgrades[id][i] = PlayerDefaultUpgrades[id][i]
-	PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
-	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
-	PlayerUpgrades[i][STA] = UpgradeMax[STA]
-	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[id][i] = 0
 	}
 
 	
@@ -4378,16 +4435,32 @@ public client_putinserver(id){
 */
 	set_task(get_pcvar_float(cv_resptime), "RespawnPlayer", id + 412)
 
-	client_cmd(id, "cl_forwardspeed 1000")
-	client_cmd(id, "cl_backspeed 1000")
-	client_cmd(id, "cl_sidespeed 1000")
+	//client_cmd(id, "cl_forwardspeed 1000")
+	//client_cmd(id, "cl_backspeed 1000")
+	//client_cmd(id, "cl_sidespeed 1000")
+	client_cmd(id, "fakelag 0; fakeloss 0")
 
 	g_bValid[id] = bool:!is_user_hltv(id)
-	load_stats(id)
-	//new x
+	set_task(0.5, "load_stats", id)
 	set_task(0.1, "WhoIs", id)
 	return PLUGIN_HANDLED
 }
+
+/*
+public CvarSnapCheck(id){
+	query_client_cvar(id, "cam_snapto", "SnapCheck")
+}
+public CameraCheck(id, const cvar[], const value[]){
+
+	if(str_to_num(value) != 0){
+		g_cam2[id] = true
+	}
+	else
+	{
+	g_cam2[id] = false
+	}
+}
+*/
 
 public WhoIs(id){
 	new plist[2048]
@@ -4416,7 +4489,7 @@ public WhoIs(id){
 	len += format(plist[len], charsmax(plist) - len, "<tr style='color:green;font-weight:bold;text-decoration:underline;'><td>PLAYER<td>TEAM<td>LOCATION")
 */
 
-	//len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://sj-pro.com/css/flags.css'></head>")
+	len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://davidkoh007.000webhostapp.com/css/flags.css'></head>")
 	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background=^"http://sj-pro.com/img/main.jpg^"><center>")
 	len += format(plist[len], charsmax(plist) - len, "<font color=#FFB000 size=3><b>%s<br>%s<br><br>", sz_name, ip)
 	len += format(plist[len], charsmax(plist) - len, "<table border=0 width=90%% cellpadding=0 cellspacing=6>")
@@ -4427,11 +4500,16 @@ public WhoIs(id){
 			continue
 			
 		get_user_name(i, sz_name, charsmax(sz_name))
-
 		len += format(plist[len], charsmax(plist) - len, "<tr><td>")
+		len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
 		if(g_userCountry_2[i][0] != EOS){
-			//len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
-			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>- 3rd -":"<font color=yellow>- 1st -", g_userCountry[i], g_userCity[i])
+			if(g_cam2[i] == true){
+				len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", "<font color=yellow>- 3rd lagless -", g_userCountry[i], g_userCity[i])
+			} else {
+				len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>- 3rd -":"<font color=yellow>- 1st -", g_userCountry[i], g_userCity[i])
+			}
+		} else if(g_cam2[i] == true){
+			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", "<font color=yellow>- 3rd lagless -", "N/A")
 		} else {
 			len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", g_cam[i]?"<font color=yellow>- 3rd -":"<font color=yellow>- 1st -", "N/A")
 		}
@@ -4444,7 +4522,7 @@ public client_disconnect(id){
 		if(rtv[id])
 		{
 			rtv[id]=false
-			has_nominated[id]=false
+			//has_nominated[id]=false
 			rtvtotal--
 		}
 	}
@@ -4499,8 +4577,8 @@ public client_disconnect(id){
 
 	g_Experience[id] = 0
 	GoalyPoints[id] = 0
+	g_cam[id] = false
 	
-
 	new x
 	for(x = 1; x<=RECORDS; x++)
 		MadeRecord[id][x] = 0
@@ -4563,17 +4641,20 @@ public BeginCountdown(){
 	
 	if(timer > (COUNTDOWN_TIME / 2)) {
 
-		set_hudmessage(20, 250, 20, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
+		set_hudmessage(20, 250, 20, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 4)
 	} else {
-		set_hudmessage(255, 0, 0, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 1)
+		set_hudmessage(255, 0, 0, -1.0, 0.55, 1, 1.0, 1.0, 1.0, 0.5, 4)
 	}
 	show_hudmessage(0, "GAME BEGINS IN:^n%i", timer)
 	
-	if(timer == 1)
+	if(timer == 1){
 		round_restart(1.0)
-	
+		set_task(1.2, "SetupRound")
+	}
 	timer--
 	set_task(0.9, "BeginCountdown", 9999)
+	
+	
 	if(timer == 0){
 		remove_task(9999)
 		GAME_MODE = MODE_GAME
@@ -5560,6 +5641,16 @@ public load_stats(id){
 		}
 	}
 */
+
+
+	for(x = 1; x <= UPGRADES; x++){
+		PlayerUpgrades[x][DEX] = UpgradeMax[DEX]
+		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
+		PlayerUpgrades[x][STA] = UpgradeMax[STA]
+		PlayerUpgrades[x][DIS] = UpgradeMax[DIS]
+	}
+
+	
 	if(IsUserAlive(id)){
 		set_speedchange(id)
 	}
@@ -5607,6 +5698,8 @@ public loadDefaultSkills(id){
 	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
 	PlayerUpgrades[i][STA] = UpgradeMax[STA]
 	PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[i][DIS] = UpgradeMax[DIS]
+	
 	}
 
 	if(IsUserAlive(id)){
@@ -5703,7 +5796,7 @@ public make_menu(add_extend)
 			while(tries<MAX_TRIES)
 			{
 				read_file(configfile,random_num(numbers[i],numbers[17-i]),read,31,trash)
-				if(containi(read,"%nominated%")==0 && num_nominated>0) format(read,31,"%s",nominated[random_num(0,num_nominated - 1)])
+				//if(containi(read,"%nominated%")==0 && num_nominated>0) format(read,31,"%s",nominated[random_num(0,num_nominated - 1)])
 				if(is_map_valid(read))
 				{
 					for(j=1;j<i;j++)
@@ -5808,7 +5901,7 @@ if(file_exists(configfile) && get_cvar_num("sj_mapchooser")){
 		format(string,31,"%s",say_commands[i])
 		if(containi(text,string)==0) return sayrockthevote(id);
 	}
-
+/*
 	for(new i=0;i<sizeof(say_commands2);i++)
 	{
 		format(string,31,"%s ",say_commands2[i])
@@ -5818,8 +5911,8 @@ if(file_exists(configfile) && get_cvar_num("sj_mapchooser")){
 			return saynominate(id,text);
 		}
 	}
-
-	if(is_map_valid2(text)) return saynominate(id,text);
+*/
+	//if(is_map_valid2(text)) return saynominate(id,text);
 
 	return PLUGIN_CONTINUE
 	}
@@ -5889,6 +5982,7 @@ if(file_exists(configfile) && get_cvar_num("sj_mapchooser")){
 return PLUGIN_HANDLED
 }
 
+/*
 public saynominate(id,nom_map[64])
 {
 	if(file_exists(configfile) && get_cvar_num("sj_mapchooser")){
@@ -5940,6 +6034,7 @@ public saynominate(id,nom_map[64])
 	}
 	return PLUGIN_HANDLED
 }
+*/
 
 public is_map_valid2(map[]){
 		if(is_map_valid(map) &&
@@ -6463,6 +6558,9 @@ public taskDeveloperCheck()
 	for(new i; i<inum; ++i) 
 	{ 
 		query_client_cvar(players[i] , "developer" , "cvar_result") 
+		query_client_cvar(players[i] , "fps_override" , "cvar_result2") 
+		query_client_cvar(players[i] , "fakeloss" , "cvar_result3")
+		query_client_cvar(players[i] , "fakelag" , "cvar_result4")
 	}
 } 
 
@@ -6472,7 +6570,7 @@ public cvar_result(id, const cvar[], const value[])
 	
     if(!fValue) 
         return
-    client_cmd(id, "developer 0;fps_override 0") 
+    client_cmd(id, "developer 0") 
     ColorChat(id, RED, "^4[SJ] ^1- ^3developer ^1is forbidden.") 
      
     if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
@@ -6490,35 +6588,22 @@ public cvar_result(id, const cvar[], const value[])
     }
 }
 
-public taskDeveloperCheck2() 
-{ 
-	if(!get_pcvar_num(cv_antideveloper)){
-		return
-	}	
-	new players[MAX_PLAYERS], inum 
-	get_players(players, inum, "ch") //don't collect BOTs & HLTVs 
-
-	for(new i; i<inum; ++i) 
-	{ 
-		query_client_cvar(players[i] , "fps_override" , "cvar_result2") 
-	} 
-}
-
 public cvar_result2(id, const cvar[], const value[]) 
 { 
-    new Float:fValue = str_to_float(value) 
-
+    new Float:fValue = str_to_float(value)	
+	
     if(!fValue) 
-        return 
+        return
     client_cmd(id, "fps_override 0") 
     ColorChat(id, RED, "^4[SJ] ^1- ^3fps_override ^1is forbidden.") 
+     
     if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
 		server_cmd("kick #%d fps_override isn't allowed on this server", get_user_userid(id)) 
-		
+	
 		new sz_name[32]
 		new sz_team = get_user_team(id)
 		get_user_name(id, sz_name, 31)
-		
+	
 		if(sz_team == T){
 			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked for abusing fps.", sz_name)
 		} else {
@@ -6526,6 +6611,53 @@ public cvar_result2(id, const cvar[], const value[])
 		}
     }
 }
+
+public cvar_result3(id, const cvar[], const value[]) 
+{ 
+    new Float:fValue = str_to_float(value) 
+
+    if(!fValue) 
+        return 
+    client_cmd(id, "fakeloss 0") 
+    ColorChat(id, RED, "^4[SJ] ^1- ^3fakeloss ^1is forbidden.") 
+    if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
+		server_cmd("kick #%d fakeloss isn't allowed on this server", get_user_userid(id)) 
+		
+		new sz_name[32]
+		new sz_team = get_user_team(id)
+		get_user_name(id, sz_name, 31)
+		
+		if(sz_team == T){
+			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked.", sz_name)
+		} else {
+			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked.", sz_name)
+		}
+    }
+}
+
+public cvar_result4(id, const cvar[], const value[]) 
+{ 
+    new Float:fValue = str_to_float(value) 
+
+    if(!fValue) 
+        return 
+    client_cmd(id, "fakelag 0") 
+    ColorChat(id, RED, "^4[SJ] ^1- ^3fakelag ^1is forbidden.") 
+    if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
+		server_cmd("kick #%d fakelag isn't allowed on this server", get_user_userid(id)) 
+		
+		new sz_name[32]
+		new sz_team = get_user_team(id)
+		get_user_name(id, sz_name, 31)
+		
+		if(sz_team == T){
+			ColorChat(0, RED, "^4[SJ] ^1- ^3%s ^1was kicked.", sz_name)
+		} else {
+			ColorChat(0, BLUE, "^4[SJ] ^1- ^3%s ^1was kicked.", sz_name)
+		}
+    }
+}
+
 
 /****************************PLUGIN-END******************************/
 
