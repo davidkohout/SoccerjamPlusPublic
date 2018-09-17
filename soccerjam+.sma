@@ -68,13 +68,9 @@
 *
 * - Change log:
 *
-* - - version 2.1.1) (pub modification):
+* - - version 2.1.2 (pub modification):
 *
 *	Various bugs fixed
-*	Implemented no fall damage (training mode);
-*	Removed LJ animation;
-*	Separated ball glow color values from ball trace (cfg);
-*	Upgraded speedometer (credits to puh);
 *	Added team color ball beams;
 *	Added ball rotating;
 *	Implemented custom map chooser (sj_plus_maps.ini);
@@ -82,11 +78,10 @@
 *	Added reseting skills option;
 *	Rewritten Help;
 *	Added integrated team management (AFK Manager + Instant Auto-Team Balance);
-*	Code optimalization for public mode /excluded SQL, FTP, HLTV (and more..) parts;
-*	Added constant HP regeneration (sj_regen 1);
+*	Added constant HP regeneration (sj_regen);
 *	Added blocking spray feature (sj_blockspray).
 *	Added Alien Timer (sj_alientimer)
-*
+*	Added Lagless Camera (sv_cheats 1 required, console cheats are blocked by plugin)
 *
 * - - version 1.0.0 (release):
 *
@@ -182,8 +177,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.1.1"
-#define LASTCHANGE 	"2018-08-30"
+#define VERSION 	"2.1.2"
+#define LASTCHANGE 	"2018-09-17"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -3532,17 +3527,17 @@ public BuyUpgrade(id){
 	for(x = 1; x <= UPGRADES; x++){
 		format(sz_lang, charsmax(sz_lang), "SJ_%s", UpgradeTitles[x])
 		if(PlayerUpgrades[id][x] == UpgradeMax[x]){
-			format(sz_temp, charsmax(sz_temp), "\r%L \y-- \r%d / %d%s",
+			format(sz_temp, charsmax(sz_temp), "\r%L \y-- \r%d \y/\r %d%s",
 			id, sz_lang, UpgradeMax[x], UpgradeMax[x] , (x==UPGRADES)?("^n"):(""))
 		}
 		else if(g_Experience[id] >=  UpgradePrice[x][PlayerUpgrades[id][x]]){
 			if(PlayerUpgrades[id][x] == 0){
-				format(sz_temp, charsmax(sz_temp), "\d%L \y-- \d%d / %d \y($%d)%s",
+				format(sz_temp, charsmax(sz_temp), "\d%L \y-- \d%d \y/\d %d \y($%d)%s",
 				id, sz_lang, PlayerUpgrades[id][x], UpgradeMax[x],
 				UpgradePrice[x][PlayerUpgrades[id][x]], (x==UPGRADES)?("^n"):(""))
 			}
 			else{
-				format(sz_temp, charsmax(sz_temp), "\w%L \y-- \w%d / %d \y($%d)%s",
+				format(sz_temp, charsmax(sz_temp), "\w%L \y-- \w%d \y/\w %d \y($%d)%s",
 				id, sz_lang, PlayerUpgrades[id][x], UpgradeMax[x],
 				UpgradePrice[x][PlayerUpgrades[id][x]], (x==UPGRADES)?("^n"):(""))
 			}
@@ -3568,7 +3563,7 @@ public BuyUpgrade(id){
 	menu_additem(menu_upgrade[id],"\yTop Stats")
 	menu_additem(menu_upgrade[id],"\yReset")
 	menu_additem(menu_upgrade[id],"\yPlayers Info")
-	//menu_addblank(menu_upgrade[id])
+	menu_addblank(menu_upgrade[id], 0)
 	menu_additem(menu_upgrade[id],"\yLagless 3rd Camera \d(requires reconnect)")
 	menu_setprop(menu_upgrade[id], MPROP_EXIT, MEXIT_NEVER)
 	menu_setprop(menu_upgrade[id],MPROP_PERPAGE,0)
@@ -4360,14 +4355,19 @@ public client_putinserver(id){
 	g_Experience[id] = 0
 	//g_showhelp[id] = false
 	
+	for(new i = 1; i <= UPGRADES; i++){
+		PlayerUpgrades[i][STR] = 0
+		PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
+		PlayerUpgrades[i][AGI] = UpgradeMax[AGI]
+		PlayerUpgrades[i][STA] = UpgradeMax[STA]
+		PlayerUpgrades[i][DIS] = UpgradeMax[DIS]
+	}
+	
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
 		TempRecord[id][i] = 0
 		if(TopPlayer[0][i] == id)
 			TopPlayer[0][i] = 0
-	}
-	for(new i = 1; i <= UPGRADES; i++){
-	PlayerUpgrades[id][i] = 0
 	}
 
 	
@@ -5641,14 +5641,6 @@ public load_stats(id){
 		}
 	}
 */
-
-
-	for(x = 1; x <= UPGRADES; x++){
-		PlayerUpgrades[x][DEX] = UpgradeMax[DEX]
-		PlayerUpgrades[x][AGI] = UpgradeMax[AGI]
-		PlayerUpgrades[x][STA] = UpgradeMax[STA]
-		PlayerUpgrades[x][DIS] = UpgradeMax[DIS]
-	}
 
 	
 	if(IsUserAlive(id)){
