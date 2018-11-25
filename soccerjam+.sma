@@ -981,7 +981,7 @@ public plugin_init(){
 	cv_pause		= 	register_cvar("sj_pause", 	"0")
 	cv_regen		=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
-	cv_antideveloper	=	register_cvar("sj_antideveloper", "1")
+	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
 	cv_description		=	register_cvar("sj_description", "0")
 	cv_timer		=	register_cvar("sj_timer",	"1")
 	
@@ -1026,7 +1026,7 @@ public plugin_init(){
 	register_menucmd(register_menuid("Team_Select",1), (1<<0)|(1<<1)|(1<<4)|(1<<5), "team_select")
 
 	CVAR_KILLNEARBALL = register_cvar("sj_kill_distance_ball", "200.0")
-	CVAR_KILLNEARHOLDER = register_cvar("sj_kill_distance_holder", "200.0")
+	CVAR_KILLNEARHOLDER = register_cvar("sj_kill_distance_holder", "250.0")
 	
 	set_pcvar_num(cv_score[T], 0)
 	set_pcvar_num(cv_score[CT], 0)
@@ -1201,7 +1201,7 @@ public CreateBall(i){
 			
 			remove_task(i + 55555)
 
-			set_pev(entity, pev_nextthink, halflife_time() + 0.01)
+			set_pev(entity, pev_nextthink, halflife_time() + 0.03)
 			
 			entity_set_float(entity,EV_FL_framerate,0.0)
 			entity_set_int(entity,EV_INT_sequence,0)
@@ -2575,13 +2575,14 @@ public PlayerDamage(victim, inflictor, attacker, Float:damage, damagetype){
 
 					if(disarmpct >= rand){
 						new vname[32], aname[32]
+						new sz_team = get_user_team(victim)
 						get_user_name(victim, vname, 31)
 						get_user_name(attacker, aname, 31)
 						Event_Record(attacker, DISHITS)
 						Event_Record(victim, DISARMED)
 
 						KickBall(victim, 1)
-						client_print(0, print_chat, "%s disarmed %s", aname, vname)
+						ColorChat(0, (sz_team == T)?RED:BLUE, "^3%s ^1has been disarmed", vname)
 						//client_print(attacker, print_chat, "%L", attacker, "SJ_DISA", vname)
 						//client_print(victim, print_chat, "%L", victim, "SJ_DISED", aname)
 					}
