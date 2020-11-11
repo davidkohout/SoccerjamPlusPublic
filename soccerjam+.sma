@@ -68,7 +68,8 @@
 *
 * - Change log:
 *
-* - - version 2.1.2 (pub modification):
+*
+* - - version 2.2.0 (pub modification):
 *
 *	Various bugs fixed
 *	Added team color ball beams;
@@ -82,6 +83,15 @@
 *	Added blocking spray feature (sj_blockspray).
 *	Added Alien Timer (sj_alientimer)
 *	Added Lagless Camera (sv_cheats 1 required, console cheats are blocked by plugin)
+*
+*
+* - - version 2.3.0
+*
+*	Strength now updates after spawn (prevents strength changing during game abuse)
+*   Lagless Camera optimized
+*   Various bugs fixed
+*
+*
 *
 * - - version 1.0.0 (release):
 *
@@ -177,8 +187,8 @@
 #include <dhudmessage>
 
 #define PLUGIN 		"SoccerJam+"
-#define VERSION 	"2.1.2"
-#define LASTCHANGE 	"2018-09-17"
+#define VERSION 	"2.3.0"
+#define LASTCHANGE 	"2020-11-11"
 #define AUTHOR 		"OneEyed&Doon&DK"
 
 #define BALANCE_IMMUNITY		ADMIN_RCON
@@ -377,6 +387,7 @@ static const UpgradeTitles[UPGRADES + 1][] = { "NULL", "STA", "STR", "AGI", "DEX
 new UpgradeMax[UPGRADES + 1]
 new UpgradePrice[UPGRADES + 1][16]
 new PlayerUpgrades[MAX_PLAYERS + 1][UPGRADES + 1]
+new PlayerUpgrades_STR[MAX_PLAYERS + 1][UPGRADES + 1]
 new PlayerDefaultUpgrades[MAX_PLAYERS + 1][UPGRADES + 1]
 
 new PowerPlay[LIMIT_BALLS], PowerPlay_list[LIMIT_BALLS][MAX_POWERPLAY + 1]
@@ -981,8 +992,8 @@ public plugin_init(){
 	cv_pause		= 	register_cvar("sj_pause", 	"0")
 	cv_regen		=	register_cvar("sj_regen",	"0")
 	cv_blockspray	=	register_cvar("sj_blockspray", "0")
-	cv_antideveloper	=	register_cvar("sj_antideveloper", "0")
-	cv_description		=	register_cvar("sj_description", "0")
+	cv_antideveloper	=	register_cvar("sj_antideveloper", "1")
+	cv_description		=	register_cvar("sj_description", "1")
 	cv_timer		=	register_cvar("sj_timer",	"1")
 	
 	register_touch("PwnBall", "player", 		"touch_Player")
@@ -995,10 +1006,11 @@ public plugin_init(){
 	register_touch("PwnBall", "func_breakable",	"touch_World")
 	register_touch("PwnBall", "func_blocker",	"touch_World")
 	register_touch("PwnBall", "PwnBall",		"touch_Ball")
-
+	
+	set_task(3.0, "taskDeveloperCheck", _, _, _, "b")
 	set_task(0.4, "Meter", _, _, _, "b")
 	set_task(1.0, "Event_Radar", _, _, _, "b")
-	set_task(3.0, "taskDeveloperCheck", _, _, _, "b") 
+	
 	//set_task(3.1, "taskDeveloperCheck2", _, _, _, "b") 
 
 	register_think("PwnBall", 	"think_Ball")
@@ -1474,7 +1486,7 @@ public KickBall(id, velType){
 	pev(id, pev_origin, ballorig)
 
 	if(!velType){
-		new str = (PlayerUpgrades[id][STR] * AMOUNT_STR) + (AMOUNT_POWERPLAY * (PowerPlay[i] * 5))
+		new str = (PlayerUpgrades_STR[id][STR] * AMOUNT_STR) + (AMOUNT_POWERPLAY * (PowerPlay[i] * 5))
 		kickVel = get_pcvar_num(cv_kick) + str
 		kickVel += g_sprint[id] * 100
 
@@ -1975,7 +1987,7 @@ public touch_Player(ball, player){
 			if(speed > 500 && PlayerUpgrades[player][DEX] < UpgradeMax[DEX]){
 				// configure catching algorithm
 				new dexlevel = PlayerUpgrades[player][DEX]
-				new bstr = (PlayerUpgrades[g_last_ballholder[i]][STR] * AMOUNT_STR) / 10
+				new bstr = (PlayerUpgrades_STR[g_last_ballholder[i]][STR] * AMOUNT_STR) / 10
 				new dex = dexlevel * (AMOUNT_DEX + 1)
 				new pct = ((pev(player, pev_button) & IN_USE) ? 10 : 0) + dex
 
@@ -2820,6 +2832,7 @@ public PlayerSpawnedSettings(id, szEntity){
 		set_speedchange(id)
 
 		set_pev(id, pev_health, float(100 + (PlayerUpgrades[id][STA] * AMOUNT_STA)))
+		PlayerUpgrades_STR[id][STR] = PlayerUpgrades[id][STR]
 
 		// prevent bug when transfered from spec or non-team
 		new sz_clip
@@ -3505,7 +3518,11 @@ public CameraChangerAdvancedHandler(id, const cvar[], const value[]){
 		client_cmd(id, "cam_idealyaw 0")
 		client_cmd(id, "cam_snapto 1")
 		client_cmd(id, "thirdperson")
-		client_cmd(id, "wait;wait;wait;wait;wait;^"connect^" %s",ip)
+		client_print(id, print_chat, "[Lagless 3rd] You have to reconnect for the camera to work.")
+		//client_cmd(id, "reconnect")
+		//client_cmd(id, "wait;wait;wait;wait;wait;^"connect^" %s",ip)
+		//engclient_cmd(id, "wait;wait;wait;wait;wait;^"connect^" %s",ip)
+		client_cmd(id, "retry")
 	}
 }
 
@@ -3619,9 +3636,13 @@ public Upgrade_Handler(id, menu, item){
 			switch(item){
 				case STA: {
 					set_pev(id, pev_max_health, float(BASE_HP + PlayerUpgrades[id][item] * AMOUNT_STA))
+					
+					/*
 					if(PlayerUpgrades[id][STA] == UpgradeMax[STA]){
 						ColorChat(id, GREEN, "^4[SJ]^1 - To prevent stamina upgrade abuse, HP will be added after respawn.")
 					}
+					*/
+					
 				}
 				case AGI: {
 					if(!g_sprint[id]){
@@ -4356,6 +4377,7 @@ public client_putinserver(id){
 	g_Experience[id] = 0
 	//g_showhelp[id] = false
 	
+	/*
 	for(new i = 1; i <= UPGRADES; i++){
 		PlayerUpgrades[i][STR] = 0
 		PlayerUpgrades[i][DEX] = UpgradeMax[DEX]
@@ -4363,6 +4385,13 @@ public client_putinserver(id){
 		PlayerUpgrades[i][STA] = UpgradeMax[STA]
 		PlayerUpgrades[i][DIS] = UpgradeMax[DIS]
 	}
+	*/
+	
+	PlayerUpgrades[id][STR] = 0
+	PlayerUpgrades[id][DEX] = UpgradeMax[DEX]
+	PlayerUpgrades[id][AGI] = UpgradeMax[AGI]
+	PlayerUpgrades[id][STA] = UpgradeMax[STA]
+	PlayerUpgrades[id][DIS] = UpgradeMax[DIS]
 	
 	for(new i = 1; i <= RECORDS; i++){
 		MadeRecord[id][i] = 0
@@ -4490,8 +4519,8 @@ public WhoIs(id){
 	len += format(plist[len], charsmax(plist) - len, "<tr style='color:green;font-weight:bold;text-decoration:underline;'><td>PLAYER<td>TEAM<td>LOCATION")
 */
 
-	len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://davidkoh007.000webhostapp.com/css/flags.css'></head>")
-	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background=^"http://sj-pro.com/img/main.jpg^"><center>")
+	//len += format(plist[len], charsmax(plist) - len, "<head><link rel='stylesheet' type='text/css' href='http://sj-pro.com/css/flags.css'></head>")
+	len += format(plist[len], charsmax(plist) - len, "<body text=#FFFFFF bgcolor=#000000 background='http://sj-pro.com/img/main.jpg'><center>")
 	len += format(plist[len], charsmax(plist) - len, "<font color=#FFB000 size=3><b>%s<br>%s<br><br>", sz_name, ip)
 	len += format(plist[len], charsmax(plist) - len, "<table border=0 width=90%% cellpadding=0 cellspacing=6>")
 	len += format(plist[len], charsmax(plist) - len, "<tr style='color:#00b300;font-weight:bold;text-decoration:underline;'><td>PLAYER<td>CAMERA<td>LOCATION")
@@ -4502,7 +4531,7 @@ public WhoIs(id){
 			
 		get_user_name(i, sz_name, charsmax(sz_name))
 		len += format(plist[len], charsmax(plist) - len, "<tr><td>")
-		len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i])
+		//len += format(plist[len], charsmax(plist) - len, "<img src='img/blank.gif' class='flag flag-%s' /> ", g_userCountry_2[i]) // vlajecky
 		if(g_userCountry_2[i][0] != EOS){
 			if(g_cam2[i] == true){
 				len += format(plist[len], charsmax(plist) - len, "%s%s<td>%s<td>%s, %s", sz_name, is_user_admin(i)?"<font color=red> [A]":"", "<font color=yellow>- 3rd lagless -", g_userCountry[i], g_userCity[i])
@@ -5356,7 +5385,7 @@ beam_CT(ball)
 	write_short(spr_beam)// laserbeam
 	
 	write_byte(10)	// life
-	write_byte(3)	// width
+	write_byte(2)	// width
 	
 	write_byte(BeamColors[CT][0])	// R
 	write_byte(BeamColors[CT][1])	// G
@@ -5374,7 +5403,7 @@ beam_T(ball)
 	write_short(spr_beam)// laserbeam
 
 	write_byte(10)	// life
-	write_byte(3)	// width	
+	write_byte(2)	// width	
 	write_byte(BeamColors[T][0])	// R
 	write_byte(BeamColors[T][1])	// G	Perfect Select
 	write_byte(BeamColors[T][2])	// B
@@ -6555,7 +6584,7 @@ public taskDeveloperCheck()
 		query_client_cvar(players[i] , "fakeloss" , "cvar_result3")
 		query_client_cvar(players[i] , "fakelag" , "cvar_result4")
 	}
-} 
+}
 
 public cvar_result(id, const cvar[], const value[]) 
 { 
@@ -6563,7 +6592,7 @@ public cvar_result(id, const cvar[], const value[])
 	
     if(!fValue) 
         return
-    client_cmd(id, "developer 0") 
+    client_cmd(id, "developer 0")
     ColorChat(id, RED, "^4[SJ] ^1- ^3developer ^1is forbidden.") 
      
     if(++g_iCount[id] >= get_pcvar_num(g_pcvarMaxCount)){ 
